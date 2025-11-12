@@ -1,0 +1,56 @@
+name: backend-tests
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_USER: root
+      DB_PASSWORD: root
+      DB_NAME: tim_test
+      NODE_ENV: test
+      DATABASE_URL: postgres://root:root@localhost:5432/tim_test
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: root
+          POSTGRES_PASSWORD: root
+          POSTGRES_DB: tim_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U root -d tim_test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Install backend
+        working-directory: backend
+        run: npm ci
+      
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      
+      - name: Wait for Postgres
+        env:
+          PGPASSWORD: ${{ env.DB_PASSWORD }}
+        run: |
+          for i in $(seq 1 60); do
+            pg_isready -h ${{ env.DB_HOST }} -p ${{ env.DB_PORT }} -U ${{ env.DB_USER }} -d ${{ env.DB_NAME }} && break
+            echo "Waiting for postgres... ($i)"
+            sleep 1
+          done
+      
+      - name: Test
+        working-directory: backend
+        run: npm test

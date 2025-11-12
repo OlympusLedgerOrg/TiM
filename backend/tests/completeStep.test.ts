@@ -4,7 +4,7 @@ import * as prismaMod from '../src/prisma/client';
 import * as socketMod from '../src/sockets/workOrderSocket';
 import { SignJWT } from 'jose';
 
-const secret = new TextEncoder().encode('change-me');
+const secret = new TextEncoder().encode(process.env.JWT_SECRET ?? 'change-me');
 
 function makeToken(sub: string, role: 'Tech'|'Supervisor'|'Admin') {
   return new SignJWT({ role }).setProtectedHeader({ alg: 'HS256' }).setSubject(sub).sign(secret);

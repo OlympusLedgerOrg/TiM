@@ -1,0 +1,301 @@
+{
+  "info": {
+    "name": "TiM - Work Order Management API",
+    "description": "Postman collection for testing TiM backend endpoints",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{jwt_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:4000",
+      "type": "string"
+    },
+    {
+      "key": "jwt_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "work_order_id",
+      "value": "wo1",
+      "type": "string"
+    },
+    {
+      "key": "step_id",
+      "value": "st1",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "item": [
+        {
+          "name": "Get Health Status",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            },
+            "description": "Check if the backend is running and database is connected"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Work Orders",
+      "item": [
+        {
+          "name": "Complete Step",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Step completed successfully with all checks passed\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/work-orders/{{work_order_id}}/steps/{{step_id}}/complete",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "v1",
+                "work-orders",
+                "{{work_order_id}}",
+                "steps",
+                "{{step_id}}",
+                "complete"
+              ]
+            },
+            "description": "Mark a step within a work order as completed. Requires JWT authentication with Tech or Supervisor role."
+          },
+          "response": [
+            {
+              "name": "Success - 200 OK",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"notes\": \"Completed successfully\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/v1/work-orders/{{work_order_id}}/steps/{{step_id}}/complete",
+                  "host": ["{{base_url}}"],
+                  "path": [
+                    "api",
+                    "v1",
+                    "work-orders",
+                    "{{work_order_id}}",
+                    "steps",
+                    "{{step_id}}",
+                    "complete"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"step\": {\n    \"id\": \"st1\",\n    \"status\": \"COMPLETED\",\n    \"notes\": \"Completed successfully\"\n  }\n}"
+            },
+            {
+              "name": "Unauthorized - 401",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"notes\": \"Completed successfully\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/v1/work-orders/{{work_order_id}}/steps/{{step_id}}/complete",
+                  "host": ["{{base_url}}"],
+                  "path": [
+                    "api",
+                    "v1",
+                    "work-orders",
+                    "{{work_order_id}}",
+                    "steps",
+                    "{{step_id}}",
+                    "complete"
+                  ]
+                }
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"message\": \"Missing token\"\n}"
+            },
+            {
+              "name": "Forbidden - 403",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"notes\": \"Completed successfully\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/v1/work-orders/{{work_order_id}}/steps/{{step_id}}/complete",
+                  "host": ["{{base_url}}"],
+                  "path": [
+                    "api",
+                    "v1",
+                    "work-orders",
+                    "{{work_order_id}}",
+                    "steps",
+                    "{{step_id}}",
+                    "complete"
+                  ]
+                }
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"message\": \"Forbidden\"\n}"
+            },
+            {
+              "name": "Not Found - 404",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"notes\": \"Completed successfully\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/v1/work-orders/invalid/steps/invalid/complete",
+                  "host": ["{{base_url}}"],
+                  "path": [
+                    "api",
+                    "v1",
+                    "work-orders",
+                    "invalid",
+                    "steps",
+                    "invalid",
+                    "complete"
+                  ]
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"message\": \"Work order or step not found\"\n}"
+            },
+            {
+              "name": "Conflict - 409",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"notes\": \"Trying to complete again\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/v1/work-orders/{{work_order_id}}/steps/{{step_id}}/complete",
+                  "host": ["{{base_url}}"],
+                  "path": [
+                    "api",
+                    "v1",
+                    "work-orders",
+                    "{{work_order_id}}",
+                    "steps",
+                    "{{step_id}}",
+                    "complete"
+                  ]
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"message\": \"Step already completed\"\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

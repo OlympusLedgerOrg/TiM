@@ -32,11 +32,12 @@ model Step {
 }
 
 model AuditLog {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   workOrderId String
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id])
   stepId      String
   actorUserId String
   action      String
   metadata    Json?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
 }

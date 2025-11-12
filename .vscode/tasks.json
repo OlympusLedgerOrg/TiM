@@ -1,0 +1,176 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "npm: install - backend",
+      "type": "npm",
+      "script": "install",
+      "path": "backend/",
+      "problemMatcher": []
+    },
+    {
+      "label": "npm: install - frontend",
+      "type": "npm",
+      "script": "install",
+      "path": "frontend/",
+      "problemMatcher": []
+    },
+    {
+      "label": "npm: dev - backend",
+      "type": "npm",
+      "script": "dev",
+      "path": "backend/",
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^(.*)$",
+          "file": 1,
+          "location": 2,
+          "message": 3
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*",
+          "endsPattern": "Server running on port"
+        }
+      }
+    },
+    {
+      "label": "npm: dev - frontend",
+      "type": "npm",
+      "script": "dev",
+      "path": "frontend/",
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^(.*)$",
+          "file": 1,
+          "location": 2,
+          "message": 3
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*",
+          "endsPattern": "Local:.*http://localhost:5173"
+        }
+      }
+    },
+    {
+      "label": "Start All (Backend + Frontend)",
+      "dependsOn": ["npm: dev - backend", "npm: dev - frontend"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Prisma: Generate Client",
+      "type": "shell",
+      "command": "npx prisma generate",
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Prisma: Migrate Dev",
+      "type": "shell",
+      "command": "npx prisma migrate dev",
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Prisma: Migrate Deploy",
+      "type": "shell",
+      "command": "npx prisma migrate deploy",
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Prisma: Studio",
+      "type": "shell",
+      "command": "npx prisma studio",
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Prisma: Seed Database",
+      "type": "npm",
+      "script": "seed",
+      "path": "backend/",
+      "problemMatcher": []
+    },
+    {
+      "label": "Test: Backend",
+      "type": "npm",
+      "script": "test",
+      "path": "backend/",
+      "problemMatcher": ["$tsc"],
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "Build: Backend",
+      "type": "npm",
+      "script": "build",
+      "path": "backend/",
+      "problemMatcher": ["$tsc"],
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      }
+    },
+    {
+      "label": "Build: Frontend",
+      "type": "npm",
+      "script": "build",
+      "path": "frontend/",
+      "problemMatcher": ["$tsc"],
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      }
+    },
+    {
+      "label": "Build All (Backend + Frontend)",
+      "dependsOn": ["Build: Backend", "Build: Frontend"],
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "Docker: Start Services",
+      "type": "shell",
+      "command": "docker-compose up -d",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Docker: Stop Services",
+      "type": "shell",
+      "command": "docker-compose down",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Docker: View Logs",
+      "type": "shell",
+      "command": "docker-compose logs -f",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

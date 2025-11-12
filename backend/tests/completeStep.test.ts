@@ -1,75 +1,73 @@
+// Ensure JWT secret is set before auth middleware is loaded
+process.env.JWT_SECRET = process.env.JWT_SECRET ?? 'test-secret';
+
+// Socket emitter mocked before app import
+jest.mock('../src/sockets/workOrderSocket', () => ({
+  emitStepCompleted: jest.fn(),
+}));
+
+// Prisma mocked BEFORE importing app to avoid real DB calls.
+const m = {
+  step: { findUnique: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
+  workOrderStep: { findUnique: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
+  auditLog: { create: jest.fn() },
+  $queryRaw: jest.fn(),
+};
+jest.mock('../src/prisma/client', () => ({ prisma: m }));
+
 import request from 'supertest';
 import { app, server } from '../src/app';
-import * as prismaMod from '../src/prisma/client';
-import * as socketMod from '../src/sockets/workOrderSocket';
 import { SignJWT } from 'jose';
 
-const secret = new TextEncoder().encode(process.env.JWT_SECRET ?? 'change-me');
+const url = (wo = 'wo-1', st = 'st-1') =>
+  `/api/v1/work-orders/${wo}/steps/${st}/complete`;
 
-function makeToken(sub: string, role: 'Tech'|'Supervisor'|'Admin') {
-  return new SignJWT({ role }).setProtectedHeader({ alg: 'HS256' }).setSubject(sub).sign(secret);
+async function makeToken(role: 'Tech' | 'Supervisor' | 'Admin') {
+  const key = new TextEncoder().encode(process.env.JWT_SECRET!);
+  return new SignJWT({ sub: 'user-1', role })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime('1h')
+    .sign(key);
 }
 
-describe('POST /complete', () => {
-  const workOrderId = 'wo1';
-  const stepId = 'st1';
+const stepApi = () => (m.step.findUnique || m.step.findFirst ? m.step : m.workOrderStep);
 
-  beforeAll(() => {
-    jest.spyOn(socketMod, 'emitStepCompleted').mockImplementation(() => {});
+describe('POST /complete', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
   });
 
   afterAll(async () => {
-    jest.restoreAllMocks();
-    server.close();
+    try { server.close(); } catch (_) {}
   });
 
   test('200 OK for Tech', async () => {
-    jest.spyOn(prismaMod.prisma.step, 'findFirst').mockResolvedValue({
-      id: stepId, workOrderId, title: 't', status: 'PENDING', notes: null, createdAt: new Date(), updatedAt: new Date()
-    } as any);
-    jest.spyOn(prismaMod.prisma.step, 'update').mockResolvedValue({
-      id: stepId, workOrderId, title: 't', status: 'COMPLETED', notes: 'done', createdAt: new Date(), updatedAt: new Date()
-    } as any);
-    jest.spyOn(prismaMod.prisma.auditLog, 'create').mockResolvedValue({} as any);
-
-    const token = await makeToken('u-tech', 'Tech');
-
-    const res = await request(app)
-      .post(`/api/v1/work-orders/${workOrderId}/steps/${stepId}/complete`)
-      .set('Authorization', `Bearer ${token}`)
-      .send({ notes: 'done' });
-
+    stepApi().findUnique.mockResolvedValue({ id: 'st-1', status: 'PENDING', workOrderId: 'wo-1' });
+    stepApi().update.mockResolvedValue({ id: 'st-1', status: 'COMPLETED', workOrderId: 'wo-1' });
+    m.auditLog.create.mockResolvedValue({ id: 'audit-1' });
+    const token = await makeToken('Tech');
+    const res = await request(app).post(url()).set('Authorization', `Bearer ${token}`).send({ notes: 'done' });
     expect(res.status).toBe(200);
   });
 
   test('403 for Admin', async () => {
-    const token = await makeToken('u-admin', 'Admin');
-    const res = await request(app)
-      .post(`/api/v1/work-orders/${workOrderId}/steps/${stepId}/complete`)
-      .set('Authorization', `Bearer ${token}`)
-      .send({});
+    const token = await makeToken('Admin');
+    const res = await request(app).post(url()).set('Authorization', `Bearer ${token}`).send({});
     expect(res.status).toBe(403);
   });
 
   test('404 for invalid ids', async () => {
-    jest.spyOn(prismaMod.prisma.step, 'findFirst').mockResolvedValue(null);
-    const token = await makeToken('u-tech', 'Tech');
-    const res = await request(app)
-      .post(`/api/v1/work-orders/bad/steps/bad/complete`)
-      .set('Authorization', `Bearer ${token}`)
-      .send({});
+    stepApi().findUnique.mockResolvedValue(null);
+    const token = await makeToken('Tech');
+    const res = await request(app).post(url('wo-missing', 'st-missing')).set('Authorization', `Bearer ${token}`).send({});
     expect(res.status).toBe(404);
   });
 
   test('409 when already completed', async () => {
-    jest.spyOn(prismaMod.prisma.step, 'findFirst').mockResolvedValue({
-      id: stepId, workOrderId, title: 't', status: 'COMPLETED', notes: null, createdAt: new Date(), updatedAt: new Date()
-    } as any);
-    const token = await makeToken('u-tech', 'Tech');
-    const res = await request(app)
-      .post(`/api/v1/work-orders/${workOrderId}/steps/${stepId}/complete`)
-      .set('Authorization', `Bearer ${token}`)
-      .send({});
+    stepApi().findUnique.mockResolvedValue({ id: 'st-1', status: 'COMPLETED', workOrderId: 'wo-1' });
+    const token = await makeToken('Tech');
+    const res = await request(app).post(url()).set('Authorization', `Bearer ${token}`).send({});
     expect(res.status).toBe(409);
   });
 });

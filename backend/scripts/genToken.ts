@@ -1,7 +1,7 @@
 #!/usr/bin/env ts-node
 /**
  * JWT Token Generator for TiM Backend
- * 
+ *
  * Usage:
  *   npm run gen-token -- --role Tech --subject user123 --expires 7d
  *   npm run gen-token -- --role Supervisor --subject admin456 --expires 30d
@@ -23,7 +23,7 @@ function parseArgs(): TokenOptions {
   const options: Partial<TokenOptions> = {
     role: 'Tech',
     subject: 'test-user',
-    expires: '7d'
+    expires: '7d',
   };
 
   for (let i = 0; i < args.length; i += 2) {
@@ -45,19 +45,27 @@ function parseArgs(): TokenOptions {
 function parseExpiration(expires: string): string {
   const match = expires.match(/^(\d+)([hdwmy])$/);
   if (!match) {
-    throw new Error(`Invalid expiration format: ${expires}. Use format like '1h', '7d', '30d', '365d'`);
+    throw new Error(
+      `Invalid expiration format: ${expires}. Use format like '1h', '7d', '30d', '365d'`
+    );
   }
 
   const [, value, unit] = match;
   const num = parseInt(value, 10);
 
   switch (unit) {
-    case 'h': return `${num}h`;
-    case 'd': return `${num * 24}h`;
-    case 'w': return `${num * 7 * 24}h`;
-    case 'm': return `${num * 30 * 24}h`;
-    case 'y': return `${num * 365 * 24}h`;
-    default: throw new Error(`Unsupported time unit: ${unit}`);
+    case 'h':
+      return `${num}h`;
+    case 'd':
+      return `${num * 24}h`;
+    case 'w':
+      return `${num * 7 * 24}h`;
+    case 'm':
+      return `${num * 30 * 24}h`;
+    case 'y':
+      return `${num * 365 * 24}h`;
+    default:
+      throw new Error(`Unsupported time unit: ${unit}`);
   }
 }
 
@@ -80,7 +88,7 @@ async function generateToken(options: TokenOptions): Promise<string> {
 async function main() {
   try {
     const options = parseArgs();
-    
+
     console.log('\n🔐 Generating JWT Token...');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log(`Role:     ${options.role}`);
@@ -89,11 +97,13 @@ async function main() {
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
     const token = await generateToken(options);
-    
+
     console.log('✅ Token generated successfully!\n');
     console.log(token);
     console.log('\n📋 Usage example:');
-    console.log(`   curl -H "Authorization: Bearer ${token}" http://localhost:4000/api/v1/work-orders/...\n`);
+    console.log(
+      `   curl -H "Authorization: Bearer ${token}" http://localhost:4000/api/v1/work-orders/...\n`
+    );
   } catch (error) {
     console.error('❌ Error:', error instanceof Error ? error.message : error);
     process.exit(1);

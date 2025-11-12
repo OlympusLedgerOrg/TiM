@@ -6,7 +6,7 @@ import { SignJWT } from 'jose';
 
 const secret = new TextEncoder().encode('change-me');
 
-function makeToken(sub: string, role: 'Tech'|'Supervisor'|'Admin') {
+function makeToken(sub: string, role: 'Tech' | 'Supervisor' | 'Admin') {
   return new SignJWT({ role }).setProtectedHeader({ alg: 'HS256' }).setSubject(sub).sign(secret);
 }
 
@@ -25,10 +25,22 @@ describe('POST /complete', () => {
 
   test('200 OK for Tech', async () => {
     jest.spyOn(prismaMod.prisma.step, 'findFirst').mockResolvedValue({
-      id: stepId, workOrderId, title: 't', status: 'PENDING', notes: null, createdAt: new Date(), updatedAt: new Date()
+      id: stepId,
+      workOrderId,
+      title: 't',
+      status: 'PENDING',
+      notes: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     } as any);
     jest.spyOn(prismaMod.prisma.step, 'update').mockResolvedValue({
-      id: stepId, workOrderId, title: 't', status: 'COMPLETED', notes: 'done', createdAt: new Date(), updatedAt: new Date()
+      id: stepId,
+      workOrderId,
+      title: 't',
+      status: 'COMPLETED',
+      notes: 'done',
+      createdAt: new Date(),
+      updatedAt: new Date(),
     } as any);
     jest.spyOn(prismaMod.prisma.auditLog, 'create').mockResolvedValue({} as any);
 
@@ -63,7 +75,13 @@ describe('POST /complete', () => {
 
   test('409 when already completed', async () => {
     jest.spyOn(prismaMod.prisma.step, 'findFirst').mockResolvedValue({
-      id: stepId, workOrderId, title: 't', status: 'COMPLETED', notes: null, createdAt: new Date(), updatedAt: new Date()
+      id: stepId,
+      workOrderId,
+      title: 't',
+      status: 'COMPLETED',
+      notes: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     } as any);
     const token = await makeToken('u-tech', 'Tech');
     const res = await request(app)

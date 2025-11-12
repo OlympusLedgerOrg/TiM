@@ -34,6 +34,7 @@ model Step {
 model AuditLog {
   id          String   @id @default(cuid())
   workOrderId String
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id])
   stepId      String
   actorUserId String
   action      String

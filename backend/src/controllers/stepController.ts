@@ -12,7 +12,7 @@ export async function completeStepController(req: Request, res: Response) {
     workOrderId: req.params.workOrderId,
     stepId: req.params.stepId,
     notes: parse.data.notes,
-    actorUserId: req.user!.id
+    actorUserId: req.user!.id,
   });
 
   return res.status(result.status).json(result.body);

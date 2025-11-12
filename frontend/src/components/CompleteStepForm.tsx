@@ -33,7 +33,9 @@ export default function CompleteStepForm({ workOrderId, stepId, onSuccess }: Pro
 
   return (
     <form className="step-form" onSubmit={handleSubmit}>
-      <label htmlFor="notes" className="step-form__label">Notes (optional)</label>
+      <label htmlFor="notes" className="step-form__label">
+        Notes (optional)
+      </label>
       <textarea
         id="notes"
         className="step-form__textarea"

@@ -12,8 +12,8 @@ export const io = new Server(httpServer, {
   path: process.env.SOCKET_IO_PATH || '/socket.io',
   cors: {
     origin: '*',
-    methods: ['GET', 'POST']
-  }
+    methods: ['GET', 'POST'],
+  },
 });
 
 // Socket.IO connection handler

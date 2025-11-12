@@ -12,17 +12,17 @@ jobs:
         env:
           POSTGRES_USER: tim
           POSTGRES_PASSWORD: tim
-          POSTGRES_DB: tim
+          POSTGRES_DB: tim_test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U tim"
+          --health-cmd "pg_isready -U tim -d tim_test"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
     
     env:
-      DATABASE_URL: postgresql://tim:tim@localhost:5432/tim
+      DATABASE_URL: postgresql://tim:tim@localhost:5432/tim_test
       JWT_SECRET: test-secret
       NODE_ENV: test
     
@@ -36,3 +36,7 @@ jobs:
       - name: Test
         working-directory: backend
         run: npm test
+        env:
+          JWT_SECRET: test-secret
+          DATABASE_URL: postgresql://tim:tim@localhost:5432/tim_test
+          NODE_ENV: test

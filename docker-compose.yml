@@ -1,0 +1,62 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: tim-db
+    environment:
+      POSTGRES_USER: tim
+      POSTGRES_PASSWORD: tim
+      POSTGRES_DB: tim
+    ports:
+      - "5432:5432"
+    volumes:
+      - tim_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tim -d tim"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: tim-backend
+    env_file:
+      - backend/.env.example
+    environment:
+      # Overwrite DATABASE_URL host to 'db' for Docker networking
+      DATABASE_URL: postgresql://tim:tim@db:5432/tim
+      JWT_SECRET: change-me
+      SOCKET_IO_PATH: /socket.io
+      PORT: 4000
+      NODE_ENV: development
+    ports:
+      - "4000:4000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: tim-frontend
+    environment:
+      NODE_ENV: development
+      # If you need the backend URL at runtime for anything else:
+      VITE_API_BASE: /api
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+
+volumes:
+  tim_db_data:

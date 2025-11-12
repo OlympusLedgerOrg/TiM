@@ -5,5 +5,8 @@ const config: Config = {
   testEnvironment: 'node',
   setupFilesAfterEnv: ['<rootDir>/tests/jest.setup.ts'],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'json'],
+  moduleNameMapper: {
+    '^(\\.{1,2}/.*)\\.js$': '$1',
+  },
 };
 export default config;

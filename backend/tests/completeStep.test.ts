@@ -31,7 +31,7 @@ async function makeToken(role: 'Tech' | 'Supervisor' | 'Admin') {
     .sign(key);
 }
 
-const stepApi = () => (m.step.findUnique || m.step.findFirst ? m.step : m.workOrderStep);
+const stepApi = () => m.step;
 
 describe('POST /complete', () => {
   beforeEach(() => {
@@ -43,7 +43,7 @@ describe('POST /complete', () => {
   });
 
   test('200 OK for Tech', async () => {
-    stepApi().findUnique.mockResolvedValue({ id: 'st-1', status: 'PENDING', workOrderId: 'wo-1' });
+    stepApi().findFirst.mockResolvedValue({ id: 'st-1', status: 'PENDING', workOrderId: 'wo-1' });
     stepApi().update.mockResolvedValue({ id: 'st-1', status: 'COMPLETED', workOrderId: 'wo-1' });
     m.auditLog.create.mockResolvedValue({ id: 'audit-1' });
     const token = await makeToken('Tech');
@@ -58,14 +58,14 @@ describe('POST /complete', () => {
   });
 
   test('404 for invalid ids', async () => {
-    stepApi().findUnique.mockResolvedValue(null);
+    stepApi().findFirst.mockResolvedValue(null);
     const token = await makeToken('Tech');
     const res = await request(app).post(url('wo-missing', 'st-missing')).set('Authorization', `Bearer ${token}`).send({});
     expect(res.status).toBe(404);
   });
 
   test('409 when already completed', async () => {
-    stepApi().findUnique.mockResolvedValue({ id: 'st-1', status: 'COMPLETED', workOrderId: 'wo-1' });
+    stepApi().findFirst.mockResolvedValue({ id: 'st-1', status: 'COMPLETED', workOrderId: 'wo-1' });
     const token = await makeToken('Tech');
     const res = await request(app).post(url()).set('Authorization', `Bearer ${token}`).send({});
     expect(res.status).toBe(409);

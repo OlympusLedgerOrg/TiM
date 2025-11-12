@@ -34,11 +34,6 @@
     "@typescript-eslint/eslint-plugin": "^8.9.0",
     "@typescript-eslint/parser": "^8.9.0"
   },
-  "jest": {
-    "preset": "ts-jest",
-    "testEnvironment": "node",
-    "testMatch": ["**/tests/**/*.test.ts"]
-  },
   "engines": {
     "node": ">=22.0.0"
   },

@@ -1,0 +1,118 @@
+{
+  "info": {
+    "name": "TiM API",
+    "description": "Work Order Management API for TiM",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:4000",
+      "type": "string"
+    },
+    {
+      "key": "workOrderId",
+      "value": "your-work-order-id",
+      "type": "string"
+    },
+    {
+      "key": "stepId",
+      "value": "your-step-id",
+      "type": "string"
+    },
+    {
+      "key": "techToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "supervisorToken",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "Check API and database health status"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Work Orders",
+      "item": [
+        {
+          "name": "Complete Step (Tech)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{techToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Step completed successfully\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}/steps/{{stepId}}/complete",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "work-orders", "{{workOrderId}}", "steps", "{{stepId}}", "complete"]
+            },
+            "description": "Complete a work order step as a Technician"
+          },
+          "response": []
+        },
+        {
+          "name": "Complete Step (Supervisor)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{supervisorToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Approved and completed by supervisor\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}/steps/{{stepId}}/complete",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "work-orders", "{{workOrderId}}", "steps", "{{stepId}}", "complete"]
+            },
+            "description": "Complete a work order step as a Supervisor"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

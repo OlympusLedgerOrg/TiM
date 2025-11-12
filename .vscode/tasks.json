@@ -1,0 +1,95 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Backend: Dev",
+      "type": "npm",
+      "script": "dev",
+      "path": "backend/",
+      "problemMatcher": ["$tsc"],
+      "isBackground": true,
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Frontend: Dev",
+      "type": "npm",
+      "script": "dev",
+      "path": "frontend/",
+      "problemMatcher": [],
+      "isBackground": true,
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Backend: Build",
+      "type": "npm",
+      "script": "build",
+      "path": "backend/",
+      "problemMatcher": ["$tsc"],
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      }
+    },
+    {
+      "label": "Frontend: Build",
+      "type": "npm",
+      "script": "build",
+      "path": "frontend/",
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      }
+    },
+    {
+      "label": "Backend: Test",
+      "type": "npm",
+      "script": "test",
+      "path": "backend/",
+      "problemMatcher": [],
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "Backend: Lint",
+      "type": "npm",
+      "script": "lint",
+      "path": "backend/",
+      "problemMatcher": ["$eslint-stylish"]
+    },
+    {
+      "label": "Frontend: Lint",
+      "type": "npm",
+      "script": "lint",
+      "path": "frontend/",
+      "problemMatcher": ["$eslint-stylish"]
+    },
+    {
+      "label": "Backend: Format",
+      "type": "npm",
+      "script": "format",
+      "path": "backend/",
+      "problemMatcher": []
+    },
+    {
+      "label": "Frontend: Format",
+      "type": "npm",
+      "script": "format",
+      "path": "frontend/",
+      "problemMatcher": []
+    },
+    {
+      "label": "Start All",
+      "dependsOn": ["Backend: Dev", "Frontend: Dev"],
+      "problemMatcher": []
+    }
+  ]
+}

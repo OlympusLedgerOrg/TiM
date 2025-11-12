@@ -1,0 +1,95 @@
+{
+  "clientName": "Thunder Client",
+  "collectionName": "TiM API",
+  "collectionId": "tim-api-collection",
+  "dateExported": "2025-11-12",
+  "version": "1.0",
+  "folders": [],
+  "requests": [
+    {
+      "id": "health-check",
+      "name": "Health Check",
+      "url": "http://localhost:4000/health",
+      "method": "GET",
+      "sortNum": 10000,
+      "created": "2025-11-12T00:00:00.000Z",
+      "modified": "2025-11-12T00:00:00.000Z",
+      "headers": [],
+      "params": [],
+      "tests": [
+        {
+          "type": "res-code",
+          "value": "200"
+        }
+      ]
+    },
+    {
+      "id": "complete-step-tech",
+      "name": "Complete Step (Tech)",
+      "url": "http://localhost:4000/api/v1/work-orders/{{workOrderId}}/steps/{{stepId}}/complete",
+      "method": "POST",
+      "sortNum": 20000,
+      "created": "2025-11-12T00:00:00.000Z",
+      "modified": "2025-11-12T00:00:00.000Z",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{techToken}}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "params": [],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"notes\": \"Step completed successfully\"\n}",
+        "form": []
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "value": "200"
+        }
+      ]
+    },
+    {
+      "id": "complete-step-supervisor",
+      "name": "Complete Step (Supervisor)",
+      "url": "http://localhost:4000/api/v1/work-orders/{{workOrderId}}/steps/{{stepId}}/complete",
+      "method": "POST",
+      "sortNum": 30000,
+      "created": "2025-11-12T00:00:00.000Z",
+      "modified": "2025-11-12T00:00:00.000Z",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{supervisorToken}}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "params": [],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"notes\": \"Approved and completed\"\n}",
+        "form": []
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "value": "200"
+        }
+      ]
+    }
+  ],
+  "env": {
+    "workOrderId": "your-work-order-id",
+    "stepId": "your-step-id",
+    "techToken": "your-tech-token-here",
+    "supervisorToken": "your-supervisor-token-here"
+  }
+}

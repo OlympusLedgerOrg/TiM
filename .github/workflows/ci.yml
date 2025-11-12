@@ -1,0 +1,118 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  backend-lint:
+    name: Backend Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        working-directory: backend
+        run: npm ci
+      - name: Run ESLint
+        working-directory: backend
+        run: npm run lint
+      - name: Check formatting
+        working-directory: backend
+        run: npm run format:check
+
+  backend-build:
+    name: Backend Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        working-directory: backend
+        run: npm ci
+      - name: Generate Prisma Client
+        working-directory: backend
+        run: npx prisma generate
+      - name: Build
+        working-directory: backend
+        run: npm run build
+
+  backend-test:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: tim
+          POSTGRES_PASSWORD: tim
+          POSTGRES_DB: tim
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        working-directory: backend
+        run: npm ci
+      - name: Generate Prisma Client
+        working-directory: backend
+        run: npx prisma generate
+      - name: Run migrations
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql://tim:tim@localhost:5432/tim
+        run: npx prisma migrate deploy || npx prisma db push
+      - name: Run tests
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql://tim:tim@localhost:5432/tim
+          JWT_SECRET: test-secret
+          NODE_ENV: test
+        run: npm test
+
+  frontend-lint:
+    name: Frontend Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Run ESLint
+        working-directory: frontend
+        run: npm run lint
+      - name: Check formatting
+        working-directory: frontend
+        run: npm run format:check
+
+  frontend-build:
+    name: Frontend Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Build
+        working-directory: frontend
+        run: npm run build

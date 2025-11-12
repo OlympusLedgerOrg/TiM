@@ -4,11 +4,12 @@
     "module": "ES2022",
     "moduleResolution": "Bundler",
     "outDir": "dist",
-    "rootDir": "src",
+    "rootDir": ".",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "types": ["jest", "node"]
   },
-  "include": ["src", "tests"]
+  "include": ["src", "tests", "prisma", "scripts"],
+  "exclude": ["node_modules", "dist"]
 }

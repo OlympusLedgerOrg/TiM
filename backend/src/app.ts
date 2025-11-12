@@ -2,6 +2,7 @@ import express from 'express';
 import { Server } from 'socket.io';
 import { createServer } from 'http';
 import workOrderRoutes from './routes/workOrders.js';
+import healthRoutes from './routes/health.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -19,6 +20,7 @@ export const io = new Server(httpServer, {
 app.use(express.json());
 
 // Routes
+app.use('/health', healthRoutes);
 app.use('/api/v1/work-orders', workOrderRoutes);
 
 // Socket.IO connection handling

@@ -1,5 +1,8 @@
 FROM node:22-alpine
 
+# Install wget for health checks
+RUN apk add --no-cache wget
+
 WORKDIR /app
 
 # Install deps first (cache-friendly)

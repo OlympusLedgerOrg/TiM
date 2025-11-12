@@ -10,7 +10,8 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/src/app.js",
     "test": "jest --detectOpenHandles --forceExit",
-    "lint": "eslint . --ext .ts"
+    "lint": "eslint . --ext .ts",
+    "seed": "ts-node-dev --transpile-only prisma/seed.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.0.0",

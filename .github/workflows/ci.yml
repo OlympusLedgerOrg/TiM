@@ -5,24 +5,26 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     services:
       postgres:
         image: postgres:15
         env:
-          POSTGRES_USER: root
-          POSTGRES_PASSWORD: root
+          POSTGRES_USER: tim
+          POSTGRES_PASSWORD: tim
           POSTGRES_DB: tim_test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U root -d tim_test"
+          --health-cmd "pg_isready -U tim -d tim_test"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
 
     env:
-      DATABASE_URL: postgresql://root:root@localhost:5432/tim_test
+      DATABASE_URL: postgresql://tim:tim@localhost:5432/tim_test
       JWT_SECRET: test-secret
       NODE_ENV: test
 
@@ -42,10 +44,10 @@ jobs:
 
       - name: Wait for Postgres to be ready
         env:
-          PGPASSWORD: root
+          PGPASSWORD: tim
         run: |
           for i in $(seq 1 30); do
-            if pg_isready -h localhost -U root -d tim_test; then
+            if pg_isready -h localhost -U tim -d tim_test; then
               echo "Postgres ready"
               break
             fi
@@ -53,10 +55,14 @@ jobs:
             sleep 1
           done
 
+      - name: Prisma generate
+        working-directory: backend
+        run: npx prisma generate
+
       - name: Test
         working-directory: backend
-        run: npm test
         env:
           JWT_SECRET: test-secret
-          DATABASE_URL: postgresql://root:root@localhost:5432/tim_test
+          DATABASE_URL: postgresql://tim:tim@localhost:5432/tim_test
           NODE_ENV: test
+        run: npm test -- --runInBand

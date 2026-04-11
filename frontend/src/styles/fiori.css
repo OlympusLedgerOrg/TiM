@@ -1,0 +1,146 @@
+/**
+ * SAP Fiori Design System Styles
+ * Mobile-first responsive design for Android, iOS, and Windows
+ */
+
+/* Set SAP Horizon theme as default */
+:root {
+  --sapBackgroundColor: #f5f6f7;
+  --sapShellColor: #354a5f;
+  --sapBrandColor: #0a6ed1;
+  --sapHighlightColor: #0854a0;
+  --sapTextColor: #32363a;
+  --sapContentPadding: 1rem;
+}
+
+/* Fiori Dashboard Layout */
+.fiori-dashboard {
+  min-height: 100vh;
+  background-color: var(--sapBackgroundColor);
+  font-family: '72', 'Arial', sans-serif;
+}
+
+.fiori-dashboard__content {
+  padding: 1rem;
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+/* Loading State */
+.fiori-dashboard__loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+}
+
+/* Error State */
+.fiori-dashboard__error {
+  margin-bottom: 1rem;
+}
+
+/* Overview Cards */
+.fiori-dashboard__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.fiori-dashboard__card {
+  box-shadow: 0 0 0.5rem rgba(0, 0, 0, 0.1);
+  border-radius: 0.5rem;
+}
+
+.fiori-card__content {
+  padding: 1.5rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 120px;
+}
+
+/* Work Centers & Batches Cards */
+.fiori-dashboard__work-centers,
+.fiori-dashboard__batches {
+  margin-bottom: 1.5rem;
+  box-shadow: 0 0 0.5rem rgba(0, 0, 0, 0.1);
+  border-radius: 0.5rem;
+}
+
+/* Table Styling */
+.fiori-table {
+  width: 100%;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .fiori-dashboard__content {
+    padding: 0.5rem;
+  }
+
+  .fiori-dashboard__cards {
+    grid-template-columns: 1fr;
+  }
+
+  .fiori-card__content {
+    min-height: 80px;
+    padding: 1rem;
+  }
+}
+
+/* Tablet Responsive */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .fiori-dashboard__cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Desktop Optimization */
+@media (min-width: 1025px) {
+  .fiori-dashboard__cards {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Touch-friendly for mobile devices */
+@media (pointer: coarse) {
+  ui5-button,
+  ui5-table-row {
+    min-height: 44px; /* iOS minimum touch target */
+  }
+}
+
+/* Windows High Contrast Mode Support */
+@media (prefers-contrast: high) {
+  .fiori-dashboard__card {
+    border: 2px solid currentColor;
+  }
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --sapBackgroundColor: #1d2d3e;
+    --sapShellColor: #354a5f;
+    --sapBrandColor: #0a6ed1;
+    --sapTextColor: #fafafa;
+  }
+}
+
+/* Print Styles */
+@media print {
+  ui5-shellbar {
+    display: none;
+  }
+
+  .fiori-dashboard__content {
+    padding: 0;
+  }
+
+  .fiori-dashboard__card {
+    box-shadow: none;
+    border: 1px solid #ccc;
+    page-break-inside: avoid;
+  }
+}

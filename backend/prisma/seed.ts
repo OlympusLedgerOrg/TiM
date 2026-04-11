@@ -127,6 +127,71 @@ async function main() {
   });
 
   console.log('✅ Created audit log entries');
+
+  // Tenant
+  const trelleborg = await prisma.tenant.create({
+    data: { id: 'tenant-trelleborg', name: 'Trelleborg Rutherfordton', sapPlantCode: 'US01' },
+  });
+
+  // Work centers
+  const [mixing, extrusion, inspection, shipping] = await Promise.all([
+    prisma.workCenter.create({ data: { tenantId: trelleborg.id, name: 'Mixing', code: 'MIX-01' } }),
+    prisma.workCenter.create({ data: { tenantId: trelleborg.id, name: 'Extrusion', code: 'EXT-01' } }),
+    prisma.workCenter.create({ data: { tenantId: trelleborg.id, name: 'Inspection', code: 'INS-01' } }),
+    prisma.workCenter.create({ data: { tenantId: trelleborg.id, name: 'Shipping', code: 'SHP-01' } }),
+  ]);
+
+  // Materials
+  const [compound, seal] = await Promise.all([
+    prisma.material.create({
+      data: {
+        tenantId: trelleborg.id,
+        sapMaterialNumber: 'MAT-7823',
+        description: 'EPDM Compound 70A',
+        unitOfMeasure: 'KG',
+      },
+    }),
+    prisma.material.create({
+      data: {
+        tenantId: trelleborg.id,
+        sapMaterialNumber: 'MAT-4491',
+        description: 'O-Ring Seal AS568-214',
+        unitOfMeasure: 'EA',
+      },
+    }),
+  ]);
+
+  // Batches — one in queue, one in progress, one flagged
+  await prisma.batch.createMany({
+    data: [
+      {
+        tenantId: trelleborg.id,
+        materialId: compound.id,
+        lotNumber: 'LOT-2024-001',
+        quantity: 500,
+        status: 'IN_QUEUE',
+        workCenterId: mixing.id,
+      },
+      {
+        tenantId: trelleborg.id,
+        materialId: seal.id,
+        lotNumber: 'LOT-2024-002',
+        quantity: 1200,
+        status: 'IN_PROGRESS',
+        workCenterId: extrusion.id,
+      },
+      {
+        tenantId: trelleborg.id,
+        materialId: seal.id,
+        lotNumber: 'LOT-2024-003',
+        quantity: 800,
+        status: 'FLAGGED',
+        workCenterId: inspection.id,
+      },
+    ],
+  });
+
+  console.log('✅ Created Trelleborg tenant, work centers, materials, and batches');
   console.log('🎉 Seeding completed successfully!');
 }
 

@@ -4,6 +4,9 @@ import { Server } from 'socket.io';
 import { createServer } from 'http';
 import workOrderRoutes from './routes/workOrders.js';
 import healthRoutes from './routes/health.js';
+import queueRoutes from './routes/queue.js';
+import movementRoutes from './routes/movements.js';
+import labReportRoutes from './routes/labReports.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -23,6 +26,9 @@ app.use(express.json());
 // Routes
 app.use('/health', healthRoutes);
 app.use('/api/v1/work-orders', workOrderRoutes);
+app.use('/api/v1/queue', queueRoutes);
+app.use('/api/v1/movements', movementRoutes);
+app.use('/api/v1/lab-reports', labReportRoutes);
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {
@@ -32,6 +38,14 @@ io.on('connection', (socket) => {
 
   socket.on('leaveWorkOrder', (workOrderId: string) => {
     socket.leave(`work-order:${workOrderId}`);
+  });
+
+  socket.on('joinTenant', (tenantId: string) => {
+    socket.join(`tenant:${tenantId}`);
+  });
+
+  socket.on('leaveTenant', (tenantId: string) => {
+    socket.leave(`tenant:${tenantId}`);
   });
 });
 

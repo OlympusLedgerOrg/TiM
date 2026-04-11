@@ -18,10 +18,15 @@ router.post('/', requireAuth, requireRole(['Tech', 'Supervisor', 'Admin']), asyn
   const parse = schema.safeParse(req.body);
   if (!parse.success) return res.status(400).json({ message: 'Invalid body', errors: parse.error.flatten() });
 
+  const data = parse.data;
   const result = await logMovement({
     tenantId: req.user!.tenantId,
     movedByUserId: req.user!.id,
-    ...parse.data,
+    batchId: data.batchId,
+    fromWorkCenterId: data.fromWorkCenterId,
+    toWorkCenterId: data.toWorkCenterId,
+    quantity: data.quantity,
+    notes: data.notes,
   });
   return res.status(result.status).json(result.body);
 });

@@ -26,10 +26,15 @@ router.post(
     const parse = submitSchema.safeParse(req.body);
     if (!parse.success) return res.status(400).json({ message: 'Invalid body', errors: parse.error.flatten() });
 
+    const data = parse.data;
     const result = await submitLabReport({
       tenantId: req.user!.tenantId,
       submittedBy: req.user!.id,
-      ...parse.data,
+      batchId: data.batchId,
+      fileHash: data.fileHash,
+      fileUrl: data.fileUrl,
+      fileName: data.fileName,
+      result: data.result,
     });
     return res.status(result.status).json(result.body);
   }

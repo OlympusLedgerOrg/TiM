@@ -73,6 +73,31 @@
   width: 100%;
 }
 
+.fiori-simple-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.fiori-simple-table th {
+  text-align: left;
+  padding: 0.75rem;
+  background-color: #f5f6f7;
+  border-bottom: 2px solid #d9d9d9;
+  font-weight: 600;
+  color: #32363a;
+}
+
+.fiori-simple-table td {
+  padding: 0.75rem;
+  border-bottom: 1px solid #e5e5e5;
+  color: #32363a;
+}
+
+.fiori-simple-table tbody tr:hover {
+  background-color: #f9fafb;
+}
+
 /* Mobile Responsive */
 @media (max-width: 768px) {
   .fiori-dashboard__content {

@@ -3,10 +3,6 @@ import '@ui5/webcomponents/dist/Card.js';
 import '@ui5/webcomponents/dist/CardHeader.js';
 import '@ui5/webcomponents/dist/Title.js';
 import '@ui5/webcomponents/dist/Label.js';
-import '@ui5/webcomponents/dist/Table.js';
-import '@ui5/webcomponents/dist/TableColumn.js';
-import '@ui5/webcomponents/dist/TableRow.js';
-import '@ui5/webcomponents/dist/TableCell.js';
 import '@ui5/webcomponents-fiori/dist/ShellBar.js';
 import { getPlantInfo, getBatches, type SAPPlantInfo, type SAPBatch } from '../services/sapService';
 
@@ -62,15 +58,17 @@ export default function FioriDashboard() {
       <div className="fiori-dashboard__content">
         {loading && (
           <div className="fiori-dashboard__loading">
-            <ui5-busy-indicator active size="Large"></ui5-busy-indicator>
+            <div style={{ textAlign: 'center', padding: '3rem' }}>
+              <p>Loading dashboard...</p>
+            </div>
           </div>
         )}
 
         {error && (
           <div className="fiori-dashboard__error">
-            <ui5-message-strip design="Negative" hide-close-button>
+            <div style={{ padding: '1rem', backgroundColor: '#ffeaea', border: '1px solid #ff0000', borderRadius: '0.5rem' }}>
               {error}
-            </ui5-message-strip>
+            </div>
           </div>
         )}
 
@@ -104,25 +102,24 @@ export default function FioriDashboard() {
             <ui5-card className="fiori-dashboard__work-centers">
               <ui5-card-header slot="header" title-text="Work Centers" subtitle-text={`${plantInfo.WorkCenters.length} active`} />
               <div className="fiori-card__content">
-                <ui5-table class="fiori-table">
-                  <ui5-table-column slot="columns">
-                    <ui5-label>Work Center</ui5-label>
-                  </ui5-table-column>
-                  <ui5-table-column slot="columns">
-                    <ui5-label>Name</ui5-label>
-                  </ui5-table-column>
-                  <ui5-table-column slot="columns">
-                    <ui5-label>Description</ui5-label>
-                  </ui5-table-column>
-
-                  {plantInfo.WorkCenters.map((wc) => (
-                    <ui5-table-row key={wc.WorkCenter}>
-                      <ui5-table-cell>{wc.WorkCenter}</ui5-table-cell>
-                      <ui5-table-cell>{wc.WorkCenterName}</ui5-table-cell>
-                      <ui5-table-cell>{wc.Description || '-'}</ui5-table-cell>
-                    </ui5-table-row>
-                  ))}
-                </ui5-table>
+                <table className="fiori-simple-table">
+                  <thead>
+                    <tr>
+                      <th>Work Center</th>
+                      <th>Name</th>
+                      <th>Description</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {plantInfo.WorkCenters.map((wc) => (
+                      <tr key={wc.WorkCenter}>
+                        <td>{wc.WorkCenter}</td>
+                        <td>{wc.WorkCenterName}</td>
+                        <td>{wc.Description || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </ui5-card>
 
@@ -130,47 +127,46 @@ export default function FioriDashboard() {
             <ui5-card className="fiori-dashboard__batches">
               <ui5-card-header slot="header" title-text="Active Batches" subtitle-text={`${batches.length} total`} />
               <div className="fiori-card__content">
-                <ui5-table class="fiori-table">
-                  <ui5-table-column slot="columns">
-                    <ui5-label>Lot Number</ui5-label>
-                  </ui5-table-column>
-                  <ui5-table-column slot="columns">
-                    <ui5-label>Material</ui5-label>
-                  </ui5-table-column>
-                  <ui5-table-column slot="columns">
-                    <ui5-label>Quantity</ui5-label>
-                  </ui5-table-column>
-                  <ui5-table-column slot="columns">
-                    <ui5-label>Status</ui5-label>
-                  </ui5-table-column>
-                  <ui5-table-column slot="columns">
-                    <ui5-label>Work Center</ui5-label>
-                  </ui5-table-column>
-
-                  {batches.slice(0, 10).map((batch) => (
-                    <ui5-table-row key={batch.BatchID}>
-                      <ui5-table-cell>{batch.LotNumber}</ui5-table-cell>
-                      <ui5-table-cell>
-                        {batch.MaterialDescription}
-                        <br />
-                        <small style={{ color: '#6a6d70' }}>{batch.MaterialNumber}</small>
-                      </ui5-table-cell>
-                      <ui5-table-cell>
-                        {batch.Quantity} {batch.UnitOfMeasure}
-                      </ui5-table-cell>
-                      <ui5-table-cell>
-                        <ui5-badge color-scheme={
-                          batch.Status === 'IN_PROGRESS' ? '8' : 
-                          batch.Status === 'FLAGGED' ? '1' : 
-                          '7'
-                        }>
-                          {batch.Status}
-                        </ui5-badge>
-                      </ui5-table-cell>
-                      <ui5-table-cell>{batch.WorkCenterName}</ui5-table-cell>
-                    </ui5-table-row>
-                  ))}
-                </ui5-table>
+                <table className="fiori-simple-table">
+                  <thead>
+                    <tr>
+                      <th>Lot Number</th>
+                      <th>Material</th>
+                      <th>Quantity</th>
+                      <th>Status</th>
+                      <th>Work Center</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {batches.slice(0, 10).map((batch) => (
+                      <tr key={batch.BatchID}>
+                        <td>{batch.LotNumber}</td>
+                        <td>
+                          {batch.MaterialDescription}
+                          <br />
+                          <small style={{ color: '#6a6d70' }}>{batch.MaterialNumber}</small>
+                        </td>
+                        <td>
+                          {batch.Quantity} {batch.UnitOfMeasure}
+                        </td>
+                        <td>
+                          <span style={{
+                            padding: '0.25rem 0.5rem',
+                            borderRadius: '0.25rem',
+                            backgroundColor: batch.Status === 'IN_PROGRESS' ? '#0a6ed1' : 
+                                           batch.Status === 'FLAGGED' ? '#ff0000' : 
+                                           '#6a6d70',
+                            color: '#ffffff',
+                            fontSize: '0.875rem',
+                          }}>
+                            {batch.Status}
+                          </span>
+                        </td>
+                        <td>{batch.WorkCenterName}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </ui5-card>
           </>

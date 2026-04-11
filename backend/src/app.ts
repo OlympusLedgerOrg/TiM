@@ -7,6 +7,7 @@ import healthRoutes from './routes/health.js';
 import queueRoutes from './routes/queue.js';
 import movementRoutes from './routes/movements.js';
 import labReportRoutes from './routes/labReports.js';
+import sapRoutes from './routes/sap.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -29,6 +30,7 @@ app.use('/api/v1/work-orders', workOrderRoutes);
 app.use('/api/v1/queue', queueRoutes);
 app.use('/api/v1/movements', movementRoutes);
 app.use('/api/v1/lab-reports', labReportRoutes);
+app.use('/api/v1/sap', sapRoutes);
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {

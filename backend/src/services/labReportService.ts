@@ -53,9 +53,13 @@ export async function submitLabReport(opts: {
       prisma.labReport.update({
         where: { id: report.id },
         data: { olympusCommitId: commitId },
-      }).catch(() => {});
+      }).catch((err) => {
+        console.error('[LabReport] Failed to update olympusCommitId:', err);
+      });
     }
-  }).catch(() => {});
+  }).catch((err) => {
+    console.error('[LabReport] Failed to commit to Olympus:', err);
+  });
 
   return { status: 201, body: { report } };
 }
@@ -100,9 +104,13 @@ export async function signoffLabReport(opts: {
       prisma.signoff.update({
         where: { id: signoff.id },
         data: { olympusCommitId: commitId },
-      }).catch(() => {});
+      }).catch((err) => {
+        console.error('[Signoff] Failed to update olympusCommitId:', err);
+      });
     }
-  }).catch(() => {});
+  }).catch((err) => {
+    console.error('[Signoff] Failed to commit to Olympus:', err);
+  });
 
   return { status: 201, body: { signoff } };
 }

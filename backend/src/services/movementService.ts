@@ -56,9 +56,13 @@ export async function logMovement(opts: {
       prisma.movement.update({
         where: { id: movement.id },
         data: { olympusCommitId: commitId },
-      }).catch(() => {}); // best-effort
+      }).catch((err) => {
+        console.error('[Movement] Failed to update olympusCommitId:', err);
+      });
     }
-  }).catch(() => {});
+  }).catch((err) => {
+    console.error('[Movement] Failed to commit to Olympus:', err);
+  });
 
   emitQueueUpdated(opts.tenantId);
 

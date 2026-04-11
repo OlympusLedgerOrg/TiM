@@ -7,7 +7,7 @@ const router = Router();
 
 const submitSchema = z.object({
   batchId: z.string().min(1),
-  fileHash: z.string().regex(/^[0-9a-f]{64}$/),  // BLAKE3 hex
+  fileHash: z.string().regex(/^[0-9a-fA-F]{64}$/),  // BLAKE3 hex
   fileUrl: z.string().url(),
   fileName: z.string().min(1).max(255),
   result: z.enum(['PENDING', 'PASS', 'FAIL']),

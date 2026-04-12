@@ -293,11 +293,180 @@ docker-compose -f docker-compose.prod.yml up -d
 
 ## Security Considerations
 
-1. **HTTPS Required**: Always use HTTPS in production for API and frontend
+1. **HTTPS Required**: Always use HTTPS in production for API and frontend. See [HTTPS Configuration](#https-configuration) below.
 2. **JWT Expiration**: Configure appropriate token expiration times
 3. **CORS**: Configure CORS policies for your domain
-4. **Rate Limiting**: Implement rate limiting on SAP endpoints
+4. **Rate Limiting**: All endpoints are rate limited (global: 100 req/min, SAP: 30 req/min). See [Rate Limiting](#rate-limiting) below.
 5. **Data Validation**: All inputs are validated with Zod schemas
+
+### Rate Limiting
+
+Rate limiting is applied at two levels:
+
+| Scope | Limit | Window | Purpose |
+|-------|-------|--------|---------|
+| Global | 100 requests | 1 minute | Protect all endpoints |
+| SAP endpoints | 30 requests | 1 minute | Prevent SAP sync overload |
+| Auth endpoints | 10 requests | 1 minute | Brute-force protection |
+
+Rate limits are configurable via environment variables:
+```env
+RATE_LIMIT_GLOBAL=100
+RATE_LIMIT_SAP=30
+RATE_LIMIT_AUTH=10
+```
+
+Response headers include `RateLimit-Limit`, `RateLimit-Remaining`, and `RateLimit-Reset` per [draft-7](https://datatracker.ietf.org/doc/html/draft-ietf-httpapi-ratelimit-headers-07).
+
+### HTTPS Configuration
+
+#### Option 1: TLS at Nginx (Recommended)
+
+Use the provided `nginx.ssl.conf` with Docker volumes:
+
+```yaml
+# docker-compose.prod.yml
+frontend:
+  volumes:
+    - ./certs:/etc/nginx/ssl:ro          # fullchain.pem + privkey.pem
+    - ./certbot/www:/var/www/certbot:ro   # Let's Encrypt challenges
+  ports:
+    - "80:80"    # HTTP → HTTPS redirect
+    - "443:443"  # HTTPS
+```
+
+#### Option 2: Let's Encrypt (Certbot)
+
+```bash
+certbot certonly --webroot -w ./certbot/www -d your-tim-domain.com
+# Certificates placed in /etc/letsencrypt/live/your-tim-domain.com/
+# Symlink or copy to ./certs/
+```
+
+#### Option 3: Cloud Load Balancer
+
+Set `DISABLE_HTTPS_REDIRECT=true` in backend when TLS is terminated at the load balancer (AWS ALB, GCP HTTPS LB, Azure App Gateway).
+
+## SAP Middleware Integration (PI/PO & Cloud Integration)
+
+### Overview
+
+TiM supports direct integration with SAP middleware platforms:
+- **SAP PI/PO** (Process Integration / Process Orchestration) — on-premise
+- **SAP Cloud Integration (CPI)** — cloud-based
+
+### Middleware Endpoints
+
+**Base URL:** `/api/v1/sap/middleware`
+
+#### Configuration & Health
+
+| Method | Endpoint | Roles | Description |
+|--------|----------|-------|-------------|
+| GET | `/config` | Admin, Supervisor | Current middleware configuration |
+| GET | `/health` | Admin | Test middleware connectivity |
+
+#### IDoc Generation
+
+| Method | Endpoint | Roles | Description |
+|--------|----------|-------|-------------|
+| GET | `/idoc/batch/:batchId` | Admin, Supervisor | Generate LOIPRO IDoc JSON for a batch |
+| GET | `/idoc/batch/:batchId/xml` | Admin, Supervisor | Generate LOIPRO IDoc XML for a batch |
+| GET | `/idoc/movement/:movementId` | Admin, Supervisor | Generate MBGMCR IDoc JSON for a movement |
+| GET | `/idoc/movement/:movementId/xml` | Admin, Supervisor | Generate MBGMCR IDoc XML for a movement |
+
+### IDoc Types
+
+#### LOIPRO07 — Production Order
+
+Maps TiM batches to SAP Production Order IDocs:
+
+```xml
+<IDOC BEGIN="1">
+  <EDI_DC40>
+    <IDOCTYP>LOIPRO07</IDOCTYP>
+    <MESTYP>LOIPRO</MESTYP>
+    <SNDPOR>TIM_PORT</SNDPOR>
+    <SNDPRN>TIM_SYSTEM</SNDPRN>
+    <RCVPOR>SAP_PORT</RCVPOR>
+    <RCVPRN>SAPCLNT100</RCVPRN>
+  </EDI_DC40>
+  <IDOC_DATA>
+    <E1ORHDR>
+      <AUFNR>LOT-2024-001</AUFNR>
+      <AUART>PP01</AUART>
+      <WERKS>MIX-01</WERKS>
+      <GAMNG>500</GAMNG>
+      <GMEIN>KG</GMEIN>
+    </E1ORHDR>
+  </IDOC_DATA>
+</IDOC>
+```
+
+#### MBGMCR03 — Goods Movement
+
+Maps TiM movements to SAP Goods Movement IDocs:
+
+```xml
+<IDOC BEGIN="1">
+  <EDI_DC40>
+    <IDOCTYP>MBGMCR03</IDOCTYP>
+    <MESTYP>MBGMCR</MESTYP>
+  </EDI_DC40>
+  <IDOC_DATA>
+    <E1BP2017_GM_HEAD_01>
+      <REF_DOC_NO>LOT-2024-001</REF_DOC_NO>
+      <E1BP2017_GM_ITEM_CREATE>
+        <MATERIAL>MAT-7823</MATERIAL>
+        <MOVE_TYPE>311</MOVE_TYPE>
+        <ENTRY_QNT>250</ENTRY_QNT>
+      </E1BP2017_GM_ITEM_CREATE>
+    </E1BP2017_GM_HEAD_01>
+  </IDOC_DATA>
+</IDOC>
+```
+
+### Middleware Configuration
+
+Set environment variables for your SAP middleware:
+
+```env
+# Middleware type: PI_PO or CLOUD_INTEGRATION
+SAP_MIDDLEWARE_TYPE=CLOUD_INTEGRATION
+
+# Endpoint URL
+SAP_MIDDLEWARE_URL=https://your-cpi-tenant.it-cpi.cfapps.eu10.hana.ondemand.com
+
+# Authentication: BASIC, OAUTH2, or CERTIFICATE
+SAP_MIDDLEWARE_AUTH_TYPE=OAUTH2
+SAP_MIDDLEWARE_CLIENT_ID=your-client-id
+
+# Enable the middleware connection
+SAP_MIDDLEWARE_ENABLED=true
+
+# SAP system partner ID for IDoc routing
+SAP_SYSTEM_ID=SAPCLNT100
+```
+
+### Integration Patterns
+
+#### Pattern 1: Scheduled IDoc Export (TiM → SAP)
+
+1. Scheduler calls `/api/v1/sap/middleware/idoc/batch/:id/xml`
+2. IDoc XML is posted to SAP PI/PO channel
+3. PI/PO routes to SAP ERP PP module
+
+#### Pattern 2: Real-Time Event Push
+
+1. TiM emits Socket.IO event on batch completion
+2. Middleware listener generates IDoc
+3. IDoc posted to Cloud Integration iFlow
+
+#### Pattern 3: Polling from SAP
+
+1. SAP CPI polls `/api/v1/sap/batches?status=COMPLETE`
+2. Processes new completions
+3. Creates confirmations in SAP PP
 
 ## Testing
 

@@ -8,6 +8,9 @@ import queueRoutes from './routes/queue.js';
 import movementRoutes from './routes/movements.js';
 import labReportRoutes from './routes/labReports.js';
 import sapRoutes from './routes/sap.js';
+import sapMiddlewareRoutes from './routes/sapMiddleware.js';
+import { globalLimiter, sapLimiter } from './middleware/rateLimiter.js';
+import { httpsRedirect } from './middleware/httpsRedirect.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -21,6 +24,12 @@ export const io = new Server(httpServer, {
   }
 });
 
+// Security middleware
+app.use(httpsRedirect);
+
+// Rate limiting (recommended by CodeQL)
+app.use(globalLimiter);
+
 // Middleware
 app.use(express.json());
 
@@ -30,7 +39,8 @@ app.use('/api/v1/work-orders', workOrderRoutes);
 app.use('/api/v1/queue', queueRoutes);
 app.use('/api/v1/movements', movementRoutes);
 app.use('/api/v1/lab-reports', labReportRoutes);
-app.use('/api/v1/sap', sapRoutes);
+app.use('/api/v1/sap', sapLimiter, sapRoutes);
+app.use('/api/v1/sap/middleware', sapLimiter, sapMiddlewareRoutes);
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {

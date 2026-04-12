@@ -13,15 +13,17 @@ enum StepStatus {
 }
 
 model WorkOrder {
-  id        String  @id @default(cuid())
+  id        String     @id @default(cuid())
+  tenantId  String     @default("default")
   title     String
   steps     Step[]
   auditLogs AuditLog[]
-  createdAt DateTime @default(now())
+  createdAt DateTime   @default(now())
 }
 
 model Step {
   id          String     @id @default(cuid())
+  tenantId    String     @default("default")
   workOrderId String
   workOrder   WorkOrder  @relation(fields: [workOrderId], references: [id])
   title       String
@@ -33,6 +35,7 @@ model Step {
 
 model AuditLog {
   id          String    @id @default(cuid())
+  tenantId    String    @default("default")
   workOrderId String
   workOrder   WorkOrder @relation(fields: [workOrderId], references: [id])
   stepId      String
@@ -40,4 +43,122 @@ model AuditLog {
   action      String
   metadata    Json?
   createdAt   DateTime  @default(now())
+}
+
+model Tenant {
+  id             String       @id @default(cuid())
+  name           String
+  sapPlantCode   String?
+  createdAt      DateTime     @default(now())
+  workCenters    WorkCenter[]
+  materials      Material[]
+  batches        Batch[]
+  movements      Movement[]
+  labReports     LabReport[]
+  signoffs       Signoff[]
+}
+
+model WorkCenter {
+  id              String     @id @default(cuid())
+  tenantId        String
+  tenant          Tenant     @relation(fields: [tenantId], references: [id])
+  name            String
+  code            String
+  description     String?
+  createdAt       DateTime   @default(now())
+  batches         Batch[]    @relation("CurrentWorkCenter")
+  movementsFrom   Movement[] @relation("FromWorkCenter")
+  movementsTo     Movement[] @relation("ToWorkCenter")
+
+  @@unique([tenantId, code])
+}
+
+model Material {
+  id                String    @id @default(cuid())
+  tenantId          String
+  tenant            Tenant    @relation(fields: [tenantId], references: [id])
+  sapMaterialNumber String?
+  description       String
+  unitOfMeasure     String    @default("EA")
+  createdAt         DateTime  @default(now())
+  batches           Batch[]
+
+  @@unique([tenantId, sapMaterialNumber])
+}
+
+model Batch {
+  id             String      @id @default(cuid())
+  tenantId       String
+  tenant         Tenant      @relation(fields: [tenantId], references: [id])
+  materialId     String
+  material       Material    @relation(fields: [materialId], references: [id])
+  lotNumber      String
+  quantity       Decimal
+  status         BatchStatus @default(IN_QUEUE)
+  workCenterId   String
+  workCenter     WorkCenter  @relation("CurrentWorkCenter", fields: [workCenterId], references: [id])
+  movements      Movement[]
+  labReports     LabReport[]
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@unique([tenantId, lotNumber])
+}
+
+enum BatchStatus {
+  IN_QUEUE
+  IN_PROGRESS
+  COMPLETE
+  FLAGGED
+}
+
+model Movement {
+  id               String     @id @default(cuid())
+  tenantId         String
+  tenant           Tenant     @relation(fields: [tenantId], references: [id])
+  batchId          String
+  batch            Batch      @relation(fields: [batchId], references: [id])
+  fromWorkCenterId String
+  fromWorkCenter   WorkCenter @relation("FromWorkCenter", fields: [fromWorkCenterId], references: [id])
+  toWorkCenterId   String
+  toWorkCenter     WorkCenter @relation("ToWorkCenter", fields: [toWorkCenterId], references: [id])
+  quantity         Decimal
+  movedByUserId    String
+  movedAt          DateTime   @default(now())
+  notes            String?
+  olympusCommitId  String?
+}
+
+model LabReport {
+  id              String     @id @default(cuid())
+  tenantId        String
+  tenant          Tenant     @relation(fields: [tenantId], references: [id])
+  batchId         String
+  batch           Batch      @relation(fields: [batchId], references: [id])
+  fileHash        String
+  fileUrl         String
+  fileName        String
+  result          LabResult  @default(PENDING)
+  submittedBy     String
+  submittedAt     DateTime   @default(now())
+  olympusCommitId String?
+  signoff         Signoff?
+}
+
+enum LabResult {
+  PENDING
+  PASS
+  FAIL
+}
+
+model Signoff {
+  id              String    @id @default(cuid())
+  tenantId        String
+  tenant          Tenant    @relation(fields: [tenantId], references: [id])
+  labReportId     String    @unique
+  labReport       LabReport @relation(fields: [labReportId], references: [id])
+  managerId       String
+  signedAt        DateTime  @default(now())
+  notes           String?
+  olympusCommitId String?
 }

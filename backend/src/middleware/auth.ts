@@ -6,7 +6,7 @@ export type Role = 'Tech' | 'Supervisor' | 'Admin';
 declare global {
   namespace Express {
     interface Request {
-      user?: { id: string; role: Role };
+      user?: { id: string; role: Role; tenantId: string };
     }
   }
 }
@@ -19,7 +19,11 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 
     const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'change-me');
     const { payload } = await jwtVerify(token, secret);
-    req.user = { id: String(payload.sub), role: payload.role as Role };
+    req.user = {
+      id: String(payload.sub),
+      role: payload.role as Role,
+      tenantId: String(payload.tenantId ?? 'default'),
+    };
     return next();
   } catch {
     return res.status(401).json({ message: 'Invalid token' });

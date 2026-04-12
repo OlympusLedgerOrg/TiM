@@ -3,6 +3,17 @@
 TiM is a full-stack industrial work-order management platform built for technicians, supervisors, and operations managers.
 It tracks work orders, step completion, and audit logs — with real-time updates and robust role-based access control (RBAC).
 
+## 🌟 SAP Integration & Mobile Support
+
+**NEW**: SAP-compatible integration for **Trelleborg Rutherfordton NC**
+- ✅ OData v4-compatible APIs for SAP ERP integration
+- ✅ SAP Fiori UI5 responsive design
+- ✅ Multi-platform support: **Android, iOS, Windows**
+- ✅ Progressive Web App (PWA) for mobile installation
+
+📖 **[SAP Integration Documentation](docs/SAP_INTEGRATION.md)**  
+📱 **[Cross-Platform Deployment Guide](docs/CROSS_PLATFORM_DEPLOYMENT.md)**
+
 🚀 Tech Stack
 
 Backend
@@ -173,12 +184,22 @@ MIT © 2025 — TiM Development Team
 
 🔄 Roadmap
 
- Step attachment uploads
+ ~~Step attachment uploads~~
 
- Offline mode with sync
+ ~~Offline mode with sync~~
 
  Supervisor dashboards
 
  Work order analytics (completion time, bottlenecks)
 
- Multi-tenant enterprise mode
+ ~~Multi-tenant enterprise mode~~
+
+✅ **SAP Integration** (Complete)
+- OData v4 APIs for materials, batches, movements
+- SAP Fiori UI5 design system
+- Cross-platform PWA support
+
+✅ **Multi-tenant Architecture** (Complete)
+- Tenant isolation at database level
+- JWT-based tenant identification
+- Plant/work center management

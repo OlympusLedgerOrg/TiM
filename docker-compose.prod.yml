@@ -20,6 +20,19 @@ services:
       SOCKET_IO_PATH: /socket.io
       PORT: 4000
       NODE_ENV: production
+      # Rate limiting
+      RATE_LIMIT_GLOBAL: "100"
+      RATE_LIMIT_SAP: "30"
+      RATE_LIMIT_AUTH: "10"
+      # HTTPS redirect disabled — TLS terminated at nginx
+      DISABLE_HTTPS_REDIRECT: "true"
+      # SAP Middleware (configure for your environment)
+      # SAP_MIDDLEWARE_TYPE: CLOUD_INTEGRATION
+      # SAP_MIDDLEWARE_URL: https://your-cpi-tenant.it-cpi.cfapps.eu10.hana.ondemand.com
+      # SAP_MIDDLEWARE_AUTH_TYPE: OAUTH2
+      # SAP_MIDDLEWARE_CLIENT_ID: your-client-id
+      # SAP_MIDDLEWARE_ENABLED: "true"
+      # SAP_SYSTEM_ID: SAPCLNT100
     depends_on:
       - db
 
@@ -28,7 +41,13 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.prod
     ports:
-      - "8080:80"
+      - "80:80"
+      - "443:443"
+    volumes:
+      # Mount TLS certificates (provide your own)
+      - ./certs:/etc/nginx/ssl:ro
+      # Optional: Let's Encrypt challenge dir
+      - ./certbot/www:/var/www/certbot:ro
     depends_on:
       - backend
 

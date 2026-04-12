@@ -2,6 +2,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import FioriDashboard from './components/FioriDashboard';
 import CompleteStepForm from './components/CompleteStepForm';
+import StationDashboard from './components/StationDashboard';
 import './styles/fiori.css';
 
 // Set SAP Fiori theme
@@ -13,8 +14,15 @@ import { setTheme } from '@ui5/webcomponents-base/dist/config/Theme.js';
 setTheme('sap_horizon');
 
 function App() {
+  const path = window.location.pathname;
+
+  // Station dashboard for operator view
+  if (path === '/station') {
+    return <StationDashboard />;
+  }
+
   // Check if we should show the Fiori dashboard
-  const showFioriDashboard = window.location.pathname === '/' || window.location.pathname === '/dashboard';
+  const showFioriDashboard = path === '/' || path === '/dashboard';
 
   return (
     <div className="app">

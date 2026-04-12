@@ -63,8 +63,16 @@ io.on('connection', (socket) => {
 
 // Start server
 const PORT = process.env.PORT || 4000;
-export const server = httpServer.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+
+// Only bind to the port outside of test runs.
+// Supertest creates its own ephemeral server binding — listening here
+// during tests causes EADDRINUSE when multiple test files import this module.
+if (process.env.NODE_ENV !== 'test') {
+  httpServer.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+  });
+}
+
+export const server = httpServer;
 
 export { app };

@@ -8,5 +8,6 @@ const config: Config = {
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
   },
+  maxWorkers: 1,  // prevent EADDRINUSE — test files share the Express server
 };
 export default config;

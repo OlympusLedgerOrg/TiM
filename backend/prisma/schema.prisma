@@ -7,10 +7,64 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+//////////////////////////////////////////////////////
+// ENUMS
+//////////////////////////////////////////////////////
+
 enum StepStatus {
   PENDING
   COMPLETED
 }
+
+enum BatchStatus {
+  IN_QUEUE
+  IN_PROGRESS
+  COMPLETE
+  FLAGGED
+}
+
+enum LabResult {
+  PENDING
+  PASS
+  FAIL
+}
+
+enum LotStatus {
+  ACTIVE
+  RESERVED
+  CONSUMED
+  SCRAPPED
+  QUARANTINED
+}
+
+enum WorkOrderStatus {
+  PLANNED
+  RELEASED
+  IN_PROGRESS
+  BLOCKED
+  COMPLETED
+  CANCELLED
+}
+
+enum ReservationStatus {
+  ACTIVE
+  RELEASED
+  CONSUMED
+  CANCELLED
+}
+
+enum MovementType {
+  RECEIVE
+  CONSUME
+  PRODUCE
+  TRANSFER
+  ADJUSTMENT
+  SCRAP
+}
+
+//////////////////////////////////////////////////////
+// CORE ENTITIES — EXISTING
+//////////////////////////////////////////////////////
 
 model WorkOrder {
   id        String     @id @default(cuid())
@@ -19,6 +73,31 @@ model WorkOrder {
   steps     Step[]
   auditLogs AuditLog[]
   createdAt DateTime   @default(now())
+
+  // --- Production execution fields ---
+  materialId     String?
+  material       Material?       @relation("WorkOrderOutputMaterial", fields: [materialId], references: [id])
+
+  bomId          String?
+  bom            BOM?            @relation(fields: [bomId], references: [id])
+
+  quantity       Float?
+  uom            String?
+
+  status         WorkOrderStatus @default(PLANNED)
+
+  scheduledStart DateTime?
+  scheduledEnd   DateTime?
+  startedAt      DateTime?
+  completedAt    DateTime?
+
+  updatedAt      DateTime        @updatedAt
+
+  // --- Production relations ---
+  workOrderSteps     WorkOrderStep[]
+  reservations       Reservation[]
+  outputLots         Lot[]
+  inventoryMovements InventoryMovement[]
 }
 
 model Step {
@@ -83,6 +162,17 @@ model Material {
   createdAt         DateTime  @default(now())
   batches           Batch[]
 
+  // --- New fields for lot genealogy & BOM engine ---
+  name              String?
+  isBatchTracked    Boolean   @default(true)
+  updatedAt         DateTime  @updatedAt
+
+  // --- New relations ---
+  lots              Lot[]
+  boms              BOM[]       @relation("BOMOutputMaterial")
+  bomItems          BOMItem[]   @relation("BOMItemMaterial")
+  workOrders        WorkOrder[] @relation("WorkOrderOutputMaterial")
+
   @@unique([tenantId, sapMaterialNumber])
 }
 
@@ -103,13 +193,6 @@ model Batch {
   updatedAt      DateTime    @updatedAt
 
   @@unique([tenantId, lotNumber])
-}
-
-enum BatchStatus {
-  IN_QUEUE
-  IN_PROGRESS
-  COMPLETE
-  FLAGGED
 }
 
 model Movement {
@@ -145,12 +228,6 @@ model LabReport {
   signoff         Signoff?
 }
 
-enum LabResult {
-  PENDING
-  PASS
-  FAIL
-}
-
 model Signoff {
   id              String    @id @default(cuid())
   tenantId        String
@@ -161,4 +238,192 @@ model Signoff {
   signedAt        DateTime  @default(now())
   notes           String?
   olympusCommitId String?
+}
+
+//////////////////////////////////////////////////////
+// LOT GRAPH (GENEALOGY DAG)
+//////////////////////////////////////////////////////
+
+model Lot {
+  id            String    @id @default(uuid())
+  materialId    String
+  material      Material  @relation(fields: [materialId], references: [id])
+
+  quantity      Float
+  uom           String
+
+  status        LotStatus @default(ACTIVE)
+
+  workOrderId   String?
+  workOrder     WorkOrder? @relation(fields: [workOrderId], references: [id])
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Genealogy edges
+  parentEdges   LotEdge[] @relation("ParentLot")
+  childEdges    LotEdge[] @relation("ChildLot")
+
+  reservations  Reservation[]
+  movements     InventoryMovement[]
+}
+
+model LotEdge {
+  id           String   @id @default(uuid())
+
+  parentLotId  String
+  childLotId   String
+
+  parentLot    Lot @relation("ParentLot", fields: [parentLotId], references: [id])
+  childLot     Lot @relation("ChildLot", fields: [childLotId], references: [id])
+
+  quantity     Float // amount transferred from parent → child
+
+  createdAt    DateTime @default(now())
+
+  @@unique([parentLotId, childLotId])
+}
+
+//////////////////////////////////////////////////////
+// BOM ENGINE (VERSIONED + EXECUTABLE)
+//////////////////////////////////////////////////////
+
+model BOM {
+  id           String   @id @default(uuid())
+  materialId   String   // output material
+  material     Material @relation("BOMOutputMaterial", fields: [materialId], references: [id])
+
+  version      Int
+  isActive     Boolean  @default(true)
+
+  validFrom    DateTime
+  validTo      DateTime?
+
+  createdAt    DateTime @default(now())
+
+  items        BOMItem[]
+  steps        BOMStep[]
+  workOrders   WorkOrder[]
+
+  @@unique([materialId, version])
+}
+
+model BOMItem {
+  id          String   @id @default(uuid())
+  bomId       String
+  bom         BOM      @relation(fields: [bomId], references: [id])
+
+  materialId  String
+  material    Material @relation("BOMItemMaterial", fields: [materialId], references: [id])
+
+  quantity    Float
+  uom         String
+
+  isOptional  Boolean  @default(false)
+
+  // for conditional logic later
+  condition   String?  // JSON logic or rule reference
+
+  createdAt   DateTime @default(now())
+}
+
+model BOMStep {
+  id          String   @id @default(uuid())
+  bomId       String
+  bom         BOM      @relation(fields: [bomId], references: [id])
+
+  name        String
+  sequence    Int
+
+  machineType String?  // press, mixer, etc
+  durationSec Int?
+
+  // constraints (store as JSON for flexibility)
+  constraints Json?
+
+  createdAt   DateTime @default(now())
+
+  workOrderSteps WorkOrderStep[]
+}
+
+//////////////////////////////////////////////////////
+// WORK ORDER EXECUTION (PRODUCTION LAYER)
+//////////////////////////////////////////////////////
+
+model WorkOrderStep {
+  id            String   @id @default(uuid())
+
+  workOrderId   String
+  workOrder     WorkOrder @relation(fields: [workOrderId], references: [id])
+
+  bomStepId     String
+  bomStep       BOMStep  @relation(fields: [bomStepId], references: [id])
+
+  status        String   // pending, in_progress, completed, blocked
+
+  startedAt     DateTime?
+  completedAt   DateTime?
+
+  operatorId    String?
+  operator      Operator? @relation(fields: [operatorId], references: [id])
+
+  data          Json?    // actual recorded values (temp, pressure, etc)
+
+  createdAt     DateTime @default(now())
+}
+
+//////////////////////////////////////////////////////
+// INVENTORY + RESERVATIONS
+//////////////////////////////////////////////////////
+
+model Reservation {
+  id            String @id @default(uuid())
+
+  lotId         String
+  lot           Lot @relation(fields: [lotId], references: [id])
+
+  workOrderId   String
+  workOrder     WorkOrder @relation(fields: [workOrderId], references: [id])
+
+  quantity      Float
+
+  status        ReservationStatus @default(ACTIVE)
+
+  createdAt     DateTime @default(now())
+}
+
+model InventoryMovement {
+  id            String @id @default(uuid())
+
+  lotId         String
+  lot           Lot @relation(fields: [lotId], references: [id])
+
+  type          MovementType
+
+  quantity      Float
+
+  workOrderId   String?
+  workOrder     WorkOrder? @relation(fields: [workOrderId], references: [id])
+
+  operatorId    String?
+  operator      Operator? @relation(fields: [operatorId], references: [id])
+
+  metadata      Json?
+
+  createdAt     DateTime @default(now())
+}
+
+//////////////////////////////////////////////////////
+// OPERATORS (AUDITABILITY)
+//////////////////////////////////////////////////////
+
+model Operator {
+  id        String @id @default(uuid())
+  name      String
+  badgeId   String? @unique
+
+  createdAt DateTime @default(now())
+
+  steps     WorkOrderStep[]
+  movements InventoryMovement[]
 }

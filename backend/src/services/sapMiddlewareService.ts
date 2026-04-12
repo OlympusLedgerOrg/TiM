@@ -35,6 +35,11 @@ export interface IDocSegment {
   children?: IDocSegment[];
 }
 
+/** Format a Date to SAP's YYYYMMDD string (e.g. 20260411). */
+function formatSAPDate(date: Date): string {
+  return date.toISOString().slice(0, 10).replace(/-/g, '');
+}
+
 // ---------- Configuration ----------
 
 /**
@@ -110,7 +115,7 @@ export async function batchToIDoc(tenantId: string, batchId: string): Promise<{
           WERKS: batch.workCenter.code,
           GAMNG: batch.quantity.toString(),
           GMEIN: batch.material.unitOfMeasure,
-          GLTRS: batch.createdAt.toISOString().split('T')[0]!.replace(/-/g, ''),
+          GLTRS: formatSAPDate(batch.createdAt),
         },
         children: [
           {
@@ -163,8 +168,8 @@ export async function movementToIDoc(tenantId: string, movementId: string): Prom
       {
         name: 'E1BP2017_GM_HEAD_01',
         fields: {
-          PSTNG_DATE: movement.movedAt.toISOString().split('T')[0]!.replace(/-/g, ''),
-          DOC_DATE: movement.movedAt.toISOString().split('T')[0]!.replace(/-/g, ''),
+          PSTNG_DATE: formatSAPDate(movement.movedAt),
+          DOC_DATE: formatSAPDate(movement.movedAt),
           REF_DOC_NO: movement.batch.lotNumber,
           HEADER_TXT: movement.notes || '',
         },

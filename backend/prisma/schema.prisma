@@ -277,6 +277,7 @@ model Lot {
   uom           String
 
   status        LotStatus @default(ACTIVE)
+  expiryDate    DateTime?
 
   workOrderId   String?
   workOrder     WorkOrder? @relation(fields: [workOrderId], references: [id])

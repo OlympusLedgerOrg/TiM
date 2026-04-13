@@ -265,9 +265,7 @@ describe('Station API', () => {
       expect(res.body.remainingQuantity).toBe(400);
     });
 
-    test('returns 403 for unauthorized role', async () => {
-      const token = await makeToken('Admin');
-      // Admin is allowed, but let's test an unauthenticated request
+    test('returns 401 without authentication', async () => {
       const res = await request(app)
         .post('/api/v1/station/consume');
       expect(res.status).toBe(401);

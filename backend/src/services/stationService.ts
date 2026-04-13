@@ -164,7 +164,7 @@ export async function getStationWorkOrder(tenantId: string, workCenterCode: stri
         consumed: consumedResult._sum.quantity ?? 0,
         uom: item.uom,
         lotId: reservation?.lot?.id ?? null,
-        lotNumber: reservation ? `LOT-${reservation.lot.id.slice(0, 8)}` : null,
+        lotNumber: reservation?.lot?.id ? `LOT-${reservation.lot.id.slice(0, 12)}` : null,
         labResult,
       });
     }

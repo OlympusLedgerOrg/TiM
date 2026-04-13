@@ -17,7 +17,7 @@ import {
 type WorkOrderComponent = StationComponent & { matNum: string };
 type WorkOrder = StationWorkOrder & { components: WorkOrderComponent[] };
 type OnHandLot = StationLot & { matNum: string };
-type InboundTransfer = StationTransfer & { matNum: string; eta: string };
+type InboundTransfer = StationTransfer & { matNum: string; movedAgo: string };
 
 // ─── UOM Conversion ───────────────────────────────────────────────────────────
 const UOM_CONVERSIONS: Record<string, { factor: number; target: string }> = {
@@ -141,6 +141,76 @@ function Card({ children, style, alert }: { children: React.ReactNode; style?: R
   return (
     <div style={{ background: "#111", border: `1px solid ${alert ? "#7f1d1d" : "#1e1e1e"}`, borderRadius: 10, padding: "14px 16px", marginBottom: 10, boxShadow: alert ? "0 0 0 1px #3a1a1a" : "none", ...style }}>
       {children}
+    </div>
+  );
+}
+
+// ─── Input Modal (touch-friendly for workers with gloves) ─────────────────────
+
+function InputModal({ title, fields, onSubmit, onClose }: {
+  title: string;
+  fields: Array<{ label: string; key: string; type?: string; defaultValue?: string; placeholder?: string }>;
+  onSubmit: (values: Record<string, string>) => void;
+  onClose: () => void;
+}) {
+  const [values, setValues] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {};
+    fields.forEach(f => { init[f.key] = f.defaultValue || ""; });
+    return init;
+  });
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 1000,
+      display: "flex", alignItems: "flex-end", justifyContent: "center",
+    }} onClick={onClose}>
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: "#111", border: "1px solid #1e1e1e", borderRadius: "16px 16px 0 0",
+          padding: "20px 16px 24px", width: "100%", maxWidth: 600,
+        }}
+      >
+        <div style={{ fontSize: 15, fontWeight: 700, color: "#f1f5f9", marginBottom: 16 }}>{title}</div>
+        {fields.map(f => (
+          <div key={f.key} style={{ marginBottom: 14 }}>
+            <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, fontWeight: 600 }}>{f.label}</label>
+            <input
+              type={f.type || "text"}
+              inputMode={f.type === "number" ? "decimal" : undefined}
+              placeholder={f.placeholder}
+              value={values[f.key]}
+              onChange={e => setValues(v => ({ ...v, [f.key]: e.target.value }))}
+              style={{
+                width: "100%", padding: "14px 16px", background: "#0a0a0a", border: "1px solid #1e1e1e",
+                borderRadius: 10, color: "#f1f5f9", fontSize: 18, fontWeight: 700,
+                fontFamily: "'DM Mono', monospace", outline: "none",
+              }}
+              autoFocus={fields.indexOf(f) === 0}
+            />
+          </div>
+        ))}
+        <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+          <button
+            onClick={onClose}
+            style={{
+              flex: 1, padding: "14px 0", background: "#1e1e1e", border: "none",
+              borderRadius: 10, color: "#6b7280", fontSize: 14, fontWeight: 600, cursor: "pointer",
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => onSubmit(values)}
+            style={{
+              flex: 2, padding: "14px 0", background: "#1a3a2a", border: "1px solid #166534",
+              borderRadius: 10, color: "#4ade80", fontSize: 14, fontWeight: 700, cursor: "pointer",
+            }}
+          >
+            Confirm
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -282,7 +352,7 @@ function Inbound({ transfers }: { transfers: InboundTransfer[] }) {
             </div>
             <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 12 }}>
               <QtyDisplay quantity={t.quantity} uom={t.uom} />
-              <div style={{ marginTop: 4, fontSize: 11, color: "#c084fc", fontWeight: 600 }}>{t.eta}</div>
+              <div style={{ marginTop: 4, fontSize: 11, color: "#c084fc", fontWeight: 600 }}>{t.movedAgo}</div>
             </div>
           </div>
         </Card>
@@ -317,17 +387,26 @@ export default function StationDashboard() {
   const [lots, setLots] = useState<OnHandLot[]>([]);
   const [transfers, setTransfers] = useState<InboundTransfer[]>([]);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
+  const [modal, setModal] = useState<{
+    type: "consume" | "produce";
+    componentId?: string;
+    lotId?: string;
+    material?: string;
+    remaining?: number;
+    uom?: string;
+  } | null>(null);
 
   // Fetch all station data
   const loadData = useCallback(async () => {
     try {
       setSyncing(true);
       setError(null);
+      const warnings: string[] = [];
 
       const [woRes, onHandRes, inboundRes] = await Promise.all([
-        getStationWorkOrder(workCenterCode).catch(() => ({ workOrder: null })),
-        getStationOnHand(workCenterCode).catch(() => ({ lots: [] as StationLot[] })),
-        getStationInbound(workCenterCode).catch(() => ({ transfers: [] as StationTransfer[] })),
+        getStationWorkOrder(workCenterCode).catch(e => { warnings.push(`Work order: ${e.message}`); return { workOrder: null }; }),
+        getStationOnHand(workCenterCode).catch(e => { warnings.push(`On-hand: ${e.message}`); return { lots: [] as StationLot[] }; }),
+        getStationInbound(workCenterCode).catch(e => { warnings.push(`Inbound: ${e.message}`); return { transfers: [] as StationTransfer[] }; }),
       ]);
 
       // Map API data to UI types
@@ -351,10 +430,13 @@ export default function StationDashboard() {
       setTransfers(inboundRes.transfers.map(t => ({
         ...t,
         matNum: t.materialNumber,
-        eta: timeSince(t.movedAt),
+        movedAgo: timeSince(t.movedAt),
       })));
 
       setLastSync(new Date());
+      if (warnings.length > 0) {
+        setError(`Partial data: ${warnings.join('; ')}`);
+      }
     } catch (err: any) {
       setError(err?.message || "Failed to load station data");
     } finally {
@@ -377,34 +459,52 @@ export default function StationDashboard() {
     return () => clearTimeout(id);
   }, [toast]);
 
-  // Handle material consumption
-  async function handleConsume(componentId: string, lotId: string) {
+  // Handle material consumption — opens touch-friendly modal
+  function handleConsume(componentId: string, lotId: string) {
     if (!workOrder) return;
     const comp = workOrder.components.find(c => c.id === componentId);
     if (!comp) return;
-    const remaining = comp.required - comp.consumed;
-    const qty = Number(prompt(`Enter weight to add (${comp.uom}):\nRemaining: ${fmtQty(remaining)} ${comp.uom}`));
-    if (!qty || qty <= 0) return;
+    setModal({
+      type: "consume",
+      componentId,
+      lotId,
+      material: comp.material,
+      remaining: comp.required - comp.consumed,
+      uom: comp.uom,
+    });
+  }
+
+  async function submitConsume(values: Record<string, string>) {
+    if (!workOrder || !modal || modal.type !== "consume") return;
+    const qty = Number(values.quantity);
+    if (!qty || qty <= 0) { setModal(null); return; }
 
     try {
       await consumeMaterial({
         workOrderId: workOrder.id,
-        lotId,
+        lotId: modal.lotId!,
         quantity: qty,
       });
-      setToast({ msg: `✓ Added ${fmtQty(qty)} ${comp.uom} of ${comp.material}`, type: "success" });
-      loadData(); // Refresh
+      setToast({ msg: `✓ Added ${fmtQty(qty)} ${modal.uom} of ${modal.material}`, type: "success" });
+      setModal(null);
+      loadData();
     } catch (err: any) {
       setToast({ msg: err?.message || "Failed to consume material", type: "error" });
+      setModal(null);
     }
   }
 
-  // Handle production output recording
-  async function handleProduce() {
+  // Handle production output — opens touch-friendly modal
+  function handleProduce() {
     if (!workOrder) return;
-    const qty = Number(prompt("Enter finished product weight:"));
-    if (!qty || qty <= 0) return;
-    const uom = prompt("Unit of measure (LB, KG, etc):") || "LB";
+    setModal({ type: "produce", uom: workOrder.components[0]?.uom || "LB" });
+  }
+
+  async function submitProduce(values: Record<string, string>) {
+    if (!workOrder) return;
+    const qty = Number(values.quantity);
+    const uom = values.uom || "LB";
+    if (!qty || qty <= 0) { setModal(null); return; }
 
     try {
       await recordProduction({
@@ -413,9 +513,11 @@ export default function StationDashboard() {
         uom,
       });
       setToast({ msg: `✓ Recorded ${fmtQty(qty)} ${uom} production output`, type: "success" });
+      setModal(null);
       loadData();
     } catch (err: any) {
       setToast({ msg: err?.message || "Failed to record production", type: "error" });
+      setModal(null);
     }
   }
 
@@ -566,6 +668,34 @@ export default function StationDashboard() {
         <span style={{ fontSize: 10, color: "#374151", fontFamily: "'DM Mono', monospace" }}>SAP · {workCenterCode} · TiM</span>
         <span style={{ fontSize: 10, color: error ? "#f87171" : "#1d4ed8", fontFamily: "'DM Mono', monospace" }}>{error ? "● OFFLINE" : "● ONLINE"}</span>
       </div>
+
+      {/* Touch-friendly input modals */}
+      {modal?.type === "consume" && (
+        <InputModal
+          title={`Weigh & Add — ${modal.material}`}
+          fields={[
+            {
+              label: `Weight (${modal.uom}) — ${fmtQty(modal.remaining || 0)} ${modal.uom} remaining`,
+              key: "quantity",
+              type: "number",
+              placeholder: `Enter ${modal.uom}`,
+            },
+          ]}
+          onSubmit={submitConsume}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal?.type === "produce" && (
+        <InputModal
+          title="Record Production Output"
+          fields={[
+            { label: "Finished product weight", key: "quantity", type: "number", placeholder: "Enter weight" },
+            { label: "Unit of measure", key: "uom", defaultValue: modal.uom || "LB", placeholder: "LB, KG, etc" },
+          ]}
+          onSubmit={submitProduce}
+          onClose={() => setModal(null)}
+        />
+      )}
     </div>
   );
 }

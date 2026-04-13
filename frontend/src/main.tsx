@@ -16,8 +16,8 @@ setTheme('sap_horizon');
 function App() {
   const path = window.location.pathname;
 
-  // Station dashboard for operator view
-  if (path === '/station') {
+  // Station dashboard for operator view — supports /station and /station?wc=MIX-01
+  if (path === '/station' || path.startsWith('/station')) {
     return <StationDashboard />;
   }
 

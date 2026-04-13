@@ -1,38 +1,23 @@
-import React, { useState, useEffect } from "react";
-
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-const MOCK_OPERATOR = { name: "J. Morales", workCenter: "MIX-01", workCenterName: "Mixing Line 1" };
-
-const MOCK_WORK_ORDER = {
-  id: "WO-2026-0047",
-  title: "EPDM Compound 70A — Batch Run",
-  status: "IN_PROGRESS",
-  scheduledEnd: "2026-04-12T18:00:00Z",
-  components: [
-    { id: "c1", material: "EPDM Base Rubber", matNum: "MAT-7823", required: 1102, consumed: 705, uom: "LB", lotId: "LOT-2024-011", labResult: "PASS" },
-    { id: "c2", material: "Carbon Black N330", matNum: "MAT-1142", required: 165, consumed: 165, uom: "LB", lotId: "LOT-2024-018", labResult: "PASS" },
-    { id: "c3", material: "Zinc Oxide", matNum: "MAT-0391", required: 27.5, consumed: 0, uom: "LB", lotId: null, labResult: null },
-    { id: "c4", material: "Sulfur Cure Pkg", matNum: "MAT-2205", required: 8, consumed: 0, uom: "KG", lotId: "LOT-2024-022", labResult: "PENDING" },
-  ],
-};
-
-const MOCK_ON_HAND = [
-  { id: "l1", lotNumber: "LOT-2024-011", material: "EPDM Base Rubber", matNum: "MAT-7823", quantity: 397, uom: "LB", status: "ACTIVE", expiresAt: "2026-09-01", labResult: "PASS" },
-  { id: "l2", lotNumber: "LOT-2024-018", material: "Carbon Black N330", matNum: "MAT-1142", quantity: 93.7, uom: "LB", status: "ACTIVE", expiresAt: "2027-01-15", labResult: "PASS" },
-  { id: "l3", lotNumber: "LOT-2024-022", material: "Sulfur Cure Pkg", matNum: "MAT-2205", quantity: 8, uom: "KG", status: "ACTIVE", expiresAt: "2026-05-30", labResult: "PENDING" },
-  { id: "l4", lotNumber: "LOT-2024-007", material: "Process Oil 10W", matNum: "MAT-0088", quantity: 15.85, uom: "GAL", status: "QUARANTINED", expiresAt: "2026-06-01", labResult: "FAIL" },
-];
-
-const MOCK_INBOUND = [
-  { id: "t1", lotNumber: "LOT-2024-031", material: "Zinc Oxide", matNum: "MAT-0391", quantity: 55, uom: "LB", fromStation: "RECEIVING", eta: "~15 min", status: "IN_TRANSIT" },
-  { id: "t2", lotNumber: "LOT-2024-033", material: "EPDM Base Rubber", matNum: "MAT-7823", quantity: 1102, uom: "LB", fromStation: "WAREHOUSE", eta: "~1 hr", status: "IN_TRANSIT" },
-];
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  getStationWorkOrder,
+  getStationOnHand,
+  getStationInbound,
+  consumeMaterial,
+  recordProduction,
+  type StationWorkOrder,
+  type StationComponent,
+  type StationLot,
+  type StationTransfer,
+} from "../services/stationService";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type WorkOrderComponent = typeof MOCK_WORK_ORDER.components[number];
-type WorkOrder = typeof MOCK_WORK_ORDER;
-type OnHandLot = typeof MOCK_ON_HAND[number];
-type InboundTransfer = typeof MOCK_INBOUND[number];
+
+// UI-layer types (extend API types with display fields)
+type WorkOrderComponent = StationComponent & { matNum: string };
+type WorkOrder = StationWorkOrder & { components: WorkOrderComponent[] };
+type OnHandLot = StationLot & { matNum: string };
+type InboundTransfer = StationTransfer & { matNum: string; eta: string };
 
 // ─── UOM Conversion ───────────────────────────────────────────────────────────
 const UOM_CONVERSIONS: Record<string, { factor: number; target: string }> = {
@@ -83,6 +68,14 @@ function timeUntil(isoStr: string): string {
   const m = Math.floor((diff % 3600000) / 60000);
   if (h > 0) return `${h}h ${m}m`;
   return `${m}m`;
+}
+
+function timeSince(isoStr: string): string {
+  const diff = Date.now() - new Date(isoStr).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 60) return `~${m} min ago`;
+  const h = Math.floor(m / 60);
+  return `~${h}h ago`;
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -154,7 +147,7 @@ function Card({ children, style, alert }: { children: React.ReactNode; style?: R
 
 // ─── Panels ───────────────────────────────────────────────────────────────────
 
-function ActiveWorkOrder({ wo }: { wo: WorkOrder }) {
+function ActiveWorkOrder({ wo, onConsume }: { wo: WorkOrder; onConsume?: (componentId: string, lotId: string) => void }) {
   const [open, setOpen] = useState(true);
   const total = wo.components.length;
   const done = wo.components.filter(c => c.consumed >= c.required).length;
@@ -168,10 +161,12 @@ function ActiveWorkOrder({ wo }: { wo: WorkOrder }) {
             <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: "#3b82f6", letterSpacing: "0.1em", marginBottom: 3 }}>{wo.id}</div>
             <div style={{ fontSize: 14, fontWeight: 600, color: "#f1f5f9", lineHeight: 1.3 }}>{wo.title}</div>
           </div>
-          <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 12 }}>
-            <div style={{ fontSize: 11, color: "#6b7280" }}>Due in</div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: "#fbbf24" }}>{timeUntil(wo.scheduledEnd)}</div>
-          </div>
+          {wo.scheduledEnd && (
+            <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 12 }}>
+              <div style={{ fontSize: 11, color: "#6b7280" }}>Due in</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#fbbf24" }}>{timeUntil(wo.scheduledEnd)}</div>
+            </div>
+          )}
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
@@ -211,10 +206,22 @@ function ActiveWorkOrder({ wo }: { wo: WorkOrder }) {
                 </div>
               </div>
               <ProgressBar value={c.consumed} max={c.required} />
-              <div style={{ marginTop: 6, display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {c.lotId && <span style={{ fontSize: 11, color: "#4b5563", fontFamily: "'DM Mono', monospace" }}>{c.lotId}</span>}
+              <div style={{ marginTop: 6, display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                {c.lotId && <span style={{ fontSize: 11, color: "#4b5563", fontFamily: "'DM Mono', monospace" }}>{c.lotNumber || c.lotId}</span>}
                 {missing && <span style={{ fontSize: 11, color: "#f87171", fontWeight: 600 }}>⚠ No lot assigned</span>}
                 {c.labResult && <StatusBadge labResult={c.labResult} />}
+                {!compDone && c.lotId && onConsume && (
+                  <button
+                    onClick={() => onConsume(c.id, c.lotId!)}
+                    style={{
+                      marginLeft: "auto", background: "#1a2a3a", border: "1px solid #1e3a5f",
+                      color: "#60a5fa", borderRadius: 6, padding: "4px 12px", fontSize: 11,
+                      fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+                    }}
+                  >
+                    ⏲ Weigh &amp; Add
+                  </button>
+                )}
               </div>
             </div>
           );
@@ -249,7 +256,7 @@ function OnHand({ lots }: { lots: OnHandLot[] }) {
             </div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               <StatusBadge status={l.status} labResult={l.labResult} />
-              <ExpiryChip dateStr={l.expiresAt} />
+              {l.expiresAt && <ExpiryChip dateStr={l.expiresAt} />}
             </div>
           </Card>
         );
@@ -295,24 +302,125 @@ const TABS = [
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 export default function StationDashboard() {
+  // Work center from URL param or default
+  const params = new URLSearchParams(window.location.search);
+  const workCenterCode = params.get("wc") || "MIX-01";
+
   const [tab, setTab] = useState("work-order");
   const [lastSync, setLastSync] = useState(new Date());
   const [syncing, setSyncing] = useState(false);
-  const op = MOCK_OPERATOR;
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Simulated auto-refresh
+  // Live data from API
+  const [workOrder, setWorkOrder] = useState<WorkOrder | null>(null);
+  const [lots, setLots] = useState<OnHandLot[]>([]);
+  const [transfers, setTransfers] = useState<InboundTransfer[]>([]);
+  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
+
+  // Fetch all station data
+  const loadData = useCallback(async () => {
+    try {
+      setSyncing(true);
+      setError(null);
+
+      const [woRes, onHandRes, inboundRes] = await Promise.all([
+        getStationWorkOrder(workCenterCode).catch(() => ({ workOrder: null })),
+        getStationOnHand(workCenterCode).catch(() => ({ lots: [] as StationLot[] })),
+        getStationInbound(workCenterCode).catch(() => ({ transfers: [] as StationTransfer[] })),
+      ]);
+
+      // Map API data to UI types
+      if (woRes.workOrder) {
+        setWorkOrder({
+          ...woRes.workOrder,
+          components: woRes.workOrder.components.map(c => ({
+            ...c,
+            matNum: c.materialNumber,
+          })),
+        });
+      } else {
+        setWorkOrder(null);
+      }
+
+      setLots(onHandRes.lots.map(l => ({
+        ...l,
+        matNum: l.materialNumber,
+      })));
+
+      setTransfers(inboundRes.transfers.map(t => ({
+        ...t,
+        matNum: t.materialNumber,
+        eta: timeSince(t.movedAt),
+      })));
+
+      setLastSync(new Date());
+    } catch (err: any) {
+      setError(err?.message || "Failed to load station data");
+    } finally {
+      setSyncing(false);
+      setLoading(false);
+    }
+  }, [workCenterCode]);
+
+  // Initial load + auto-refresh every 30s
   useEffect(() => {
-    const id = setInterval(() => setLastSync(new Date()), 60000);
+    loadData();
+    const id = setInterval(loadData, 30000);
     return () => clearInterval(id);
-  }, []);
+  }, [loadData]);
 
-  function handleSync() {
-    setSyncing(true);
-    setTimeout(() => { setSyncing(false); setLastSync(new Date()); }, 1200);
+  // Clear toast after 3s
+  useEffect(() => {
+    if (!toast) return;
+    const id = setTimeout(() => setToast(null), 3000);
+    return () => clearTimeout(id);
+  }, [toast]);
+
+  // Handle material consumption
+  async function handleConsume(componentId: string, lotId: string) {
+    if (!workOrder) return;
+    const comp = workOrder.components.find(c => c.id === componentId);
+    if (!comp) return;
+    const remaining = comp.required - comp.consumed;
+    const qty = Number(prompt(`Enter weight to add (${comp.uom}):\nRemaining: ${fmtQty(remaining)} ${comp.uom}`));
+    if (!qty || qty <= 0) return;
+
+    try {
+      await consumeMaterial({
+        workOrderId: workOrder.id,
+        lotId,
+        quantity: qty,
+      });
+      setToast({ msg: `✓ Added ${fmtQty(qty)} ${comp.uom} of ${comp.material}`, type: "success" });
+      loadData(); // Refresh
+    } catch (err: any) {
+      setToast({ msg: err?.message || "Failed to consume material", type: "error" });
+    }
   }
 
-  const flagCount = MOCK_ON_HAND.filter(l => l.status === "QUARANTINED" || l.labResult === "FAIL").length;
-  const missingLots = MOCK_WORK_ORDER.components.filter(c => !c.lotId).length;
+  // Handle production output recording
+  async function handleProduce() {
+    if (!workOrder) return;
+    const qty = Number(prompt("Enter finished product weight:"));
+    if (!qty || qty <= 0) return;
+    const uom = prompt("Unit of measure (LB, KG, etc):") || "LB";
+
+    try {
+      await recordProduction({
+        workOrderId: workOrder.id,
+        quantity: qty,
+        uom,
+      });
+      setToast({ msg: `✓ Recorded ${fmtQty(qty)} ${uom} production output`, type: "success" });
+      loadData();
+    } catch (err: any) {
+      setToast({ msg: err?.message || "Failed to record production", type: "error" });
+    }
+  }
+
+  const flagCount = lots.filter(l => l.status === "QUARANTINED" || l.labResult === "FAIL").length;
+  const missingLots = workOrder?.components.filter(c => !c.lotId).length ?? 0;
 
   return (
     <div style={{ minHeight: "100vh", background: "#0a0a0a", color: "#f1f5f9", fontFamily: "'DM Sans', 'Segoe UI', sans-serif", display: "flex", flexDirection: "column", maxWidth: 600, margin: "0 auto" }}>
@@ -326,6 +434,20 @@ export default function StationDashboard() {
         ::-webkit-scrollbar-thumb { background: #1e1e1e; border-radius: 2px; }
       `}</style>
 
+      {/* Toast notification */}
+      {toast && (
+        <div style={{
+          position: "fixed", top: 16, left: "50%", transform: "translateX(-50%)",
+          background: toast.type === "success" ? "#1a3a2a" : "#3a1a1a",
+          border: `1px solid ${toast.type === "success" ? "#166534" : "#7f1d1d"}`,
+          color: toast.type === "success" ? "#4ade80" : "#fca5a5",
+          borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 600,
+          zIndex: 1000, boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
+        }}>
+          {toast.msg}
+        </div>
+      )}
+
       {/* Header */}
       <div style={{ background: "#0d0d0d", borderBottom: "1px solid #1a1a1a", padding: "12px 16px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -333,15 +455,15 @@ export default function StationDashboard() {
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
               <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: "#3b82f6", letterSpacing: "0.15em", fontWeight: 600 }}>TiM</span>
               <span style={{ width: 1, height: 12, background: "#1e1e1e" }} />
-              <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: "#4b5563", letterSpacing: "0.1em" }}>{op.workCenter}</span>
+              <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: "#4b5563", letterSpacing: "0.1em" }}>{workCenterCode}</span>
             </div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: "#f1f5f9" }}>{op.workCenterName}</div>
-            <div style={{ fontSize: 12, color: "#4b5563", marginTop: 1 }}>{op.name}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#f1f5f9" }}>Station Dashboard</div>
           </div>
           <div style={{ textAlign: "right" }}>
             <button
-              onClick={handleSync}
-              style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 6, color: syncing ? "#4b5563" : "#6b7280", fontSize: 11, padding: "5px 10px", cursor: "pointer", fontFamily: "'DM Mono', monospace", display: "block", marginLeft: "auto", marginBottom: 4 }}
+              onClick={loadData}
+              disabled={syncing}
+              style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 6, color: syncing ? "#4b5563" : "#6b7280", fontSize: 11, padding: "5px 10px", cursor: syncing ? "default" : "pointer", fontFamily: "'DM Mono', monospace", display: "block", marginLeft: "auto", marginBottom: 4 }}
             >
               {syncing ? "syncing…" : "↻ sync"}
             </button>
@@ -364,6 +486,13 @@ export default function StationDashboard() {
                 ⚠ {missingLots} component{missingLots > 1 ? "s" : ""} unassigned
               </span>
             )}
+          </div>
+        )}
+
+        {/* Error banner */}
+        {error && (
+          <div style={{ marginTop: 10, background: "#2d1010", border: "1px solid #7f1d1d", borderRadius: 8, padding: "8px 14px", fontSize: 12, color: "#fca5a5" }}>
+            {error}
           </div>
         )}
       </div>
@@ -394,15 +523,48 @@ export default function StationDashboard() {
 
       {/* Content */}
       <div style={{ flex: 1, padding: 16, overflowY: "auto" }}>
-        {tab === "work-order" && <ActiveWorkOrder wo={MOCK_WORK_ORDER} />}
-        {tab === "on-hand"    && <OnHand lots={MOCK_ON_HAND} />}
-        {tab === "inbound"    && <Inbound transfers={MOCK_INBOUND} />}
+        {loading ? (
+          <div style={{ textAlign: "center", padding: "3rem 0", color: "#4b5563" }}>
+            <div style={{ fontSize: 28, marginBottom: 8 }}>⏳</div>
+            <div style={{ fontSize: 13 }}>Loading station data…</div>
+          </div>
+        ) : (
+          <>
+            {tab === "work-order" && (
+              workOrder ? (
+                <>
+                  <ActiveWorkOrder wo={workOrder} onConsume={handleConsume} />
+                  {/* Record production button */}
+                  <div style={{ marginTop: 16 }}>
+                    <button
+                      onClick={handleProduce}
+                      style={{
+                        width: "100%", padding: "14px 0", background: "#1a3a2a", border: "1px solid #166534",
+                        borderRadius: 10, color: "#4ade80", fontSize: 14, fontWeight: 700, cursor: "pointer",
+                        fontFamily: "'DM Sans', sans-serif", letterSpacing: "0.02em",
+                      }}
+                    >
+                      ✓ Record Production Output
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div style={{ textAlign: "center", padding: "3rem 0", color: "#4b5563" }}>
+                  <div style={{ fontSize: 28, marginBottom: 8 }}>📋</div>
+                  <div style={{ fontSize: 13 }}>No active work order at this station</div>
+                </div>
+              )
+            )}
+            {tab === "on-hand" && <OnHand lots={lots} />}
+            {tab === "inbound" && <Inbound transfers={transfers} />}
+          </>
+        )}
       </div>
 
       {/* Footer */}
       <div style={{ borderTop: "1px solid #1a1a1a", padding: "8px 16px", background: "#0d0d0d", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ fontSize: 10, color: "#374151", fontFamily: "'DM Mono', monospace" }}>SAP · {op.workCenter} · PLANT-NC01</span>
-        <span style={{ fontSize: 10, color: "#1d4ed8", fontFamily: "'DM Mono', monospace" }}>● ONLINE</span>
+        <span style={{ fontSize: 10, color: "#374151", fontFamily: "'DM Mono', monospace" }}>SAP · {workCenterCode} · TiM</span>
+        <span style={{ fontSize: 10, color: error ? "#f87171" : "#1d4ed8", fontFamily: "'DM Mono', monospace" }}>{error ? "● OFFLINE" : "● ONLINE"}</span>
       </div>
     </div>
   );

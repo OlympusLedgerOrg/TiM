@@ -55,7 +55,7 @@ describe('Allocation API', () => {
   });
 
   afterAll(async () => {
-    try { server.close(); } catch (_) { /* noop */ }
+    try { server.close(); } catch { /* cleanup errors intentionally ignored */ }
   });
 
   // ─── POST /api/v1/allocation/allocate ─────────────────────────────────────

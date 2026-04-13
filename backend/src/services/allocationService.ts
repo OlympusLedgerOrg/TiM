@@ -234,7 +234,7 @@ export async function consumeReservation(reservationId: string) {
         lotId: movement.lotId,
         workOrderId: movement.workOrderId,
       },
-      remainingLotQuantity: Math.max(updatedLot.quantity - 0, 0),
+      remainingLotQuantity: Math.max(updatedLot.quantity, 0),
     };
   });
 }

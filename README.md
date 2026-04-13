@@ -9,7 +9,7 @@ It tracks work orders, step completion, and audit logs — with real-time update
 - ✅ OData v4-compatible APIs for SAP ERP integration
 - ✅ SAP Fiori UI5 responsive design
 - ✅ Multi-platform support: **Android, iOS, Windows**
-- ✅ Progressive Web App (PWA) for mobile installation
+- 🔄 Progressive Web App (PWA) with manifest (offline support planned)
 
 📖 **[SAP Integration Documentation](docs/SAP_INTEGRATION.md)**  
 📱 **[Cross-Platform Deployment Guide](docs/CROSS_PLATFORM_DEPLOYMENT.md)**
@@ -184,9 +184,9 @@ MIT © 2025 — TiM Development Team
 
 🔄 Roadmap
 
- ~~Step attachment uploads~~
+ 🔄 Offline mode with service worker sync
 
- ~~Offline mode with sync~~
+ Step attachment uploads
 
  Supervisor dashboards
 

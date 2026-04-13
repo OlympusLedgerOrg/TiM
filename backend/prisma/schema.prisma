@@ -66,6 +66,23 @@ enum MovementType {
 // CORE ENTITIES — EXISTING
 //////////////////////////////////////////////////////
 
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  role      String   // Tech, Supervisor, Admin
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  auditLogs AuditLog[]
+  movements Movement[]
+  labReports LabReport[]
+  signoffs  Signoff[]
+}
+
 model WorkOrder {
   id        String     @id @default(cuid())
   tenantId  String     @default("default")
@@ -119,6 +136,7 @@ model AuditLog {
   workOrder   WorkOrder @relation(fields: [workOrderId], references: [id])
   stepId      String
   actorUserId String
+  actorUser   User      @relation(fields: [actorUserId], references: [id])
   action      String
   metadata    Json?
   createdAt   DateTime  @default(now())
@@ -129,6 +147,7 @@ model Tenant {
   name           String
   sapPlantCode   String?
   createdAt      DateTime     @default(now())
+  users          User[]
   workCenters    WorkCenter[]
   materials      Material[]
   batches        Batch[]
@@ -207,6 +226,7 @@ model Movement {
   toWorkCenter     WorkCenter @relation("ToWorkCenter", fields: [toWorkCenterId], references: [id])
   quantity         Decimal
   movedByUserId    String
+  movedByUser      User       @relation(fields: [movedByUserId], references: [id])
   movedAt          DateTime   @default(now())
   notes            String?
   olympusCommitId  String?
@@ -223,6 +243,7 @@ model LabReport {
   fileName        String
   result          LabResult  @default(PENDING)
   submittedBy     String
+  submittedByUser User       @relation(fields: [submittedBy], references: [id])
   submittedAt     DateTime   @default(now())
   olympusCommitId String?
   signoff         Signoff?
@@ -235,6 +256,7 @@ model Signoff {
   labReportId     String    @unique
   labReport       LabReport @relation(fields: [labReportId], references: [id])
   managerId       String
+  manager         User      @relation(fields: [managerId], references: [id])
   signedAt        DateTime  @default(now())
   notes           String?
   olympusCommitId String?

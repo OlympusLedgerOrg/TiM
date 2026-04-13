@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import { Server } from 'socket.io';
 import { createServer } from 'http';
+import { jwtVerify } from 'jose';
 import workOrderRoutes from './routes/workOrders.js';
 import healthRoutes from './routes/health.js';
 import queueRoutes from './routes/queue.js';
@@ -11,16 +12,37 @@ import sapRoutes from './routes/sap.js';
 import sapMiddlewareRoutes from './routes/sapMiddleware.js';
 import { globalLimiter, sapLimiter } from './middleware/rateLimiter.js';
 import { httpsRedirect } from './middleware/httpsRedirect.js';
+import type { Role } from './middleware/auth.js';
 
 const app = express();
 const httpServer = createServer(app);
 
-// Initialize Socket.IO
+// Initialize Socket.IO with secure CORS configuration
+const allowedOrigins = process.env.SOCKET_IO_CORS_ORIGIN
+  ? process.env.SOCKET_IO_CORS_ORIGIN.split(',').map(o => o.trim())
+  : [];
+
 export const io = new Server(httpServer, {
   path: process.env.SOCKET_IO_PATH || '/socket.io',
   cors: {
-    origin: '*',
-    methods: ['GET', 'POST']
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, Postman, etc.)
+      if (!origin) return callback(null, true);
+
+      // In test/dev environments, allow any origin if not explicitly configured
+      if (process.env.NODE_ENV !== 'production' && allowedOrigins.length === 0) {
+        return callback(null, true);
+      }
+
+      // Check if origin is in allowed list
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`Origin ${origin} not allowed by CORS`));
+      }
+    },
+    methods: ['GET', 'POST'],
+    credentials: true
   }
 });
 
@@ -33,6 +55,30 @@ app.use(globalLimiter);
 // Middleware
 app.use(express.json());
 
+// Socket.IO authentication middleware
+io.use(async (socket, next) => {
+  try {
+    const token = socket.handshake.auth.token || socket.handshake.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return next(new Error('Authentication token required'));
+    }
+
+    const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'change-me');
+    const { payload } = await jwtVerify(token, secret);
+
+    // Attach user info to socket for later use
+    socket.data.user = {
+      id: String(payload.sub),
+      role: payload.role as Role,
+      tenantId: String(payload.tenantId ?? 'default'),
+    };
+
+    next();
+  } catch (error) {
+    next(new Error('Invalid authentication token'));
+  }
+});
+
 // Routes
 app.use('/health', healthRoutes);
 app.use('/api/v1/work-orders', workOrderRoutes);
@@ -42,8 +88,10 @@ app.use('/api/v1/lab-reports', labReportRoutes);
 app.use('/api/v1/sap', sapLimiter, sapRoutes);
 app.use('/api/v1/sap/middleware', sapLimiter, sapMiddlewareRoutes);
 
-// Socket.IO connection handling
+// Socket.IO connection handling with tenant validation
 io.on('connection', (socket) => {
+  const userTenantId = socket.data.user?.tenantId;
+
   socket.on('joinWorkOrder', (workOrderId: string) => {
     socket.join(`work-order:${workOrderId}`);
   });
@@ -53,6 +101,11 @@ io.on('connection', (socket) => {
   });
 
   socket.on('joinTenant', (tenantId: string) => {
+    // Validate that user is only joining their own tenant room
+    if (tenantId !== userTenantId) {
+      socket.emit('error', { message: 'Cannot join tenant room: access denied' });
+      return;
+    }
     socket.join(`tenant:${tenantId}`);
   });
 

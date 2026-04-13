@@ -62,6 +62,36 @@ enum MovementType {
   SCRAP
 }
 
+enum EquipmentStatus {
+  RUNNING
+  IDLE
+  DOWN
+  MAINTENANCE
+  SETUP
+  CHANGEOVER
+}
+
+enum DowntimeCategory {
+  PLANNED
+  UNPLANNED
+  CHANGEOVER
+  MATERIAL_WAIT
+  QUALITY_HOLD
+  MAINTENANCE
+}
+
+enum ShiftPattern {
+  FIRST    // 6am-2pm
+  SECOND   // 2pm-10pm
+  THIRD    // 10pm-6am
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
 //////////////////////////////////////////////////////
 // CORE ENTITIES — EXISTING
 //////////////////////////////////////////////////////
@@ -150,12 +180,36 @@ model Tenant {
   sapPlantCode   String?
   createdAt      DateTime     @default(now())
   users          User[]
+  plantAreas     PlantArea[]
   workCenters    WorkCenter[]
   materials      Material[]
   batches        Batch[]
   movements      Movement[]
   labReports     LabReport[]
   signoffs       Signoff[]
+  equipment      Equipment[]
+}
+
+// PlantArea: Physical building / section of the Rutherfordton site.
+// Trelleborg Rutherfordton has three: Main Plant, Shipping, New Plant.
+// Work centers and equipment belong to a plant area.
+model PlantArea {
+  id              String       @id @default(uuid())
+  tenantId        String
+  tenant          Tenant       @relation(fields: [tenantId], references: [id])
+
+  code            String       // "MAIN", "SHIP", "NEW"
+  name            String       // "Main Plant", "Shipping", "New Plant"
+  description     String?
+
+  isActive        Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  workCenters     WorkCenter[]
+  equipment       Equipment[]
+
+  @@unique([tenantId, code])
 }
 
 model WorkCenter {
@@ -165,10 +219,15 @@ model WorkCenter {
   name            String
   code            String
   description     String?
+
+  plantAreaId     String?
+  plantArea       PlantArea? @relation(fields: [plantAreaId], references: [id])
+
   createdAt       DateTime   @default(now())
   batches         Batch[]    @relation("CurrentWorkCenter")
   movementsFrom   Movement[] @relation("FromWorkCenter")
   movementsTo     Movement[] @relation("ToWorkCenter")
+  equipment       Equipment[]
 
   @@unique([tenantId, code])
 }
@@ -454,4 +513,147 @@ model Operator {
 
   steps     WorkOrderStep[]
   movements InventoryMovement[]
+  shifts    ShiftAssignment[]
+}
+
+//////////////////////////////////////////////////////
+// EQUIPMENT + DOWNTIME (AXXOS INTEGRATION)
+//////////////////////////////////////////////////////
+
+model Equipment {
+  id              String          @id @default(uuid())
+  tenantId        String
+  tenant          Tenant          @relation(fields: [tenantId], references: [id])
+
+  code            String          // e.g., "PRESS-01", "MIX-03"
+  name            String          // e.g., "Banbury Mixer #3"
+  type            String          // press, mixer, extruder, calender, mill
+  description     String?
+
+  workCenterId    String?
+  workCenter      WorkCenter?     @relation(fields: [workCenterId], references: [id])
+
+  plantAreaId     String?
+  plantArea       PlantArea?      @relation(fields: [plantAreaId], references: [id])
+
+  // Axxos mapping
+  axxosEquipmentId String?        // External Axxos equipment identifier
+
+  // Current state (denormalized for fast reads on station dashboard)
+  status          EquipmentStatus @default(IDLE)
+  statusSince     DateTime        @default(now())
+  currentOperatorId String?
+
+  // Capacity / targets
+  targetCycleTimeSec Int?         // Expected cycle time in seconds
+  targetOee       Float?          // Target OEE % (e.g., 0.85)
+
+  isActive        Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  downtimeEvents  DowntimeEvent[]
+
+  @@unique([tenantId, code])
+}
+
+model DowntimeEvent {
+  id              String           @id @default(uuid())
+  tenantId        String
+
+  equipmentId     String
+  equipment       Equipment        @relation(fields: [equipmentId], references: [id])
+
+  category        DowntimeCategory
+  reasonCode      String           // e.g., "MAT-WAIT", "MOLD-CHANGE", "BREAKDOWN-HYDRAULIC"
+  reasonText      String?          // Free-text from operator: "Waiting for compound from mixer"
+
+  startedAt       DateTime         @default(now())
+  endedAt         DateTime?        // null = still down
+  durationMin     Float?           // Computed on close, or periodically updated
+
+  // Who reported it
+  reportedById    String?
+  workOrderId     String?          // Which WO was affected
+  plantAreaCode   String?          // Which plant area: "MAIN", "SHIP", "NEW"
+
+  // Escalation
+  escalatedToTeams Boolean         @default(false)
+  escalatedAt     DateTime?
+
+  metadata        Json?            // Axxos sync data, machine codes, etc.
+
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+model ScrapReason {
+  id              String   @id @default(uuid())
+  tenantId        String
+
+  code            String   // e.g., "VISC-OOS", "CONTAM", "CURE-FAIL", "EQUIP-MAL"
+  description     String   // e.g., "Off-spec viscosity", "Contamination"
+  category        String   // quality, equipment, process, material
+  isActive        Boolean  @default(true)
+
+  createdAt       DateTime @default(now())
+
+  @@unique([tenantId, code])
+}
+
+//////////////////////////////////////////////////////
+// SHIFT MANAGEMENT
+//////////////////////////////////////////////////////
+
+model ShiftAssignment {
+  id              String       @id @default(uuid())
+  tenantId        String
+
+  operatorId      String
+  operator        Operator     @relation(fields: [operatorId], references: [id])
+
+  shift           ShiftPattern
+  date            DateTime     @db.Date  // Calendar date of shift
+  workCenterCode  String?      // Which station they're assigned to
+  plantAreaCode   String?      // Which building: "MAIN", "SHIP", "NEW"
+
+  clockInAt       DateTime?
+  clockOutAt      DateTime?
+
+  notes           String?
+
+  createdAt       DateTime     @default(now())
+
+  @@unique([tenantId, operatorId, date, shift])
+}
+
+//////////////////////////////////////////////////////
+// TEAMS NOTIFICATIONS
+//////////////////////////////////////////////////////
+
+model TeamsWebhook {
+  id              String   @id @default(uuid())
+  tenantId        String
+
+  name            String           // "Maintenance Alerts", "QC Channel", "Shift Leads"
+  webhookUrl      String           // MS Teams incoming webhook URL
+  channel         String           // "#main-plant-alerts", "#shipping-alerts", "#new-plant-alerts"
+
+  // Scope: which plant area this webhook covers (null = all areas)
+  plantAreaCode   String?          // "MAIN", "SHIP", "NEW" — or null for site-wide
+
+  // What triggers this webhook
+  onDowntime      Boolean  @default(true)
+  onQualityFail   Boolean  @default(true)
+  onShortage      Boolean  @default(true)
+  onEscalation    Boolean  @default(true)
+
+  // Escalation rules
+  downtimeThresholdMin Int @default(15) // Alert after N minutes of downtime
+
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([tenantId, name])
 }

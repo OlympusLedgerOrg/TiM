@@ -10,6 +10,32 @@ import {
   type StationLot,
   type StationTransfer,
 } from "../services/stationService";
+import {
+  getEquipment,
+  type EquipmentSummary,
+} from "../services/equipmentService";
+import { socketManager } from "../services/socketService";
+import {
+  isOnline,
+  onConnectivityChange,
+  cacheData,
+  getCachedData,
+  enqueueAction,
+  flushQueue,
+  getQueueSize,
+} from "../services/offlineQueue";
+import {
+  alertMachineDown,
+  alertMachineUp,
+  alertSuccess,
+  alertNotification,
+  initAudio,
+} from "../services/alertSounds";
+import BadgeLogin from "./BadgeLogin";
+import ShiftBanner from "./ShiftBanner";
+import EquipmentTiles from "./EquipmentTiles";
+import DowntimeGrid from "./DowntimeGrid";
+import ScanModal from "./ScanModal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -18,6 +44,12 @@ type WorkOrderComponent = StationComponent & { matNum: string };
 type WorkOrder = StationWorkOrder & { components: WorkOrderComponent[] };
 type OnHandLot = StationLot & { matNum: string };
 type InboundTransfer = StationTransfer & { matNum: string; movedAgo: string };
+
+// Operator session
+interface OperatorSession {
+  id: string;
+  shift: "FIRST" | "SECOND" | "THIRD";
+}
 
 // ─── UOM Conversion ───────────────────────────────────────────────────────────
 const UOM_CONVERSIONS: Record<string, { factor: number; target: string }> = {
@@ -149,7 +181,7 @@ function Card({ children, style, alert }: { children: React.ReactNode; style?: R
 
 function InputModal({ title, fields, onSubmit, onClose }: {
   title: string;
-  fields: Array<{ label: string; key: string; type?: string; defaultValue?: string; placeholder?: string }>;
+  fields: Array<{ label: string; key: string; type?: string; defaultValue?: string; placeholder?: string; step?: number }>;
   onSubmit: (values: Record<string, string>) => void;
   onClose: () => void;
 }) {
@@ -158,6 +190,15 @@ function InputModal({ title, fields, onSubmit, onClose }: {
     fields.forEach(f => { init[f.key] = f.defaultValue || ""; });
     return init;
   });
+
+  // Stepper buttons for numeric fields (glove-friendly +/- buttons)
+  function adjustValue(key: string, delta: number, step: number) {
+    setValues(v => {
+      const current = Number(v[key]) || 0;
+      const next = Math.max(0, +(current + delta * step).toFixed(2));
+      return { ...v, [key]: next.toString() };
+    });
+  }
 
   return (
     <div style={{
@@ -172,30 +213,64 @@ function InputModal({ title, fields, onSubmit, onClose }: {
         }}
       >
         <div style={{ fontSize: 15, fontWeight: 700, color: "#f1f5f9", marginBottom: 16 }}>{title}</div>
-        {fields.map(f => (
-          <div key={f.key} style={{ marginBottom: 14 }}>
-            <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, fontWeight: 600 }}>{f.label}</label>
-            <input
-              type={f.type || "text"}
-              inputMode={f.type === "number" ? "decimal" : undefined}
-              placeholder={f.placeholder}
-              value={values[f.key]}
-              onChange={e => setValues(v => ({ ...v, [f.key]: e.target.value }))}
-              style={{
-                width: "100%", padding: "14px 16px", background: "#0a0a0a", border: "1px solid #1e1e1e",
-                borderRadius: 10, color: "#f1f5f9", fontSize: 18, fontWeight: 700,
-                fontFamily: "'DM Mono', monospace", outline: "none",
-              }}
-              autoFocus={fields.indexOf(f) === 0}
-            />
-          </div>
-        ))}
+        {fields.map(f => {
+          const isNumber = f.type === "number";
+          const stepSize = f.step || (isNumber ? 1 : 0);
+          return (
+            <div key={f.key} style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, fontWeight: 600 }}>{f.label}</label>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                {/* Minus stepper button (glove mode) */}
+                {isNumber && (
+                  <button
+                    onClick={() => adjustValue(f.key, -1, stepSize)}
+                    style={{
+                      width: 56, height: 56, background: "#1e1e1e", border: "1px solid #2a2a2a",
+                      borderRadius: 10, color: "#f87171", fontSize: 24, fontWeight: 700,
+                      cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                    }}
+                  >
+                    −
+                  </button>
+                )}
+                <input
+                  type={f.type || "text"}
+                  inputMode={isNumber ? "decimal" : undefined}
+                  placeholder={f.placeholder}
+                  value={values[f.key]}
+                  onChange={e => setValues(v => ({ ...v, [f.key]: e.target.value }))}
+                  style={{
+                    width: "100%", padding: "14px 16px", background: "#0a0a0a", border: "1px solid #1e1e1e",
+                    borderRadius: 10, color: "#f1f5f9", fontSize: 18, fontWeight: 700,
+                    fontFamily: "'DM Mono', monospace", outline: "none",
+                    textAlign: isNumber ? "center" : "left",
+                  }}
+                  autoFocus={fields.indexOf(f) === 0}
+                />
+                {/* Plus stepper button (glove mode) */}
+                {isNumber && (
+                  <button
+                    onClick={() => adjustValue(f.key, 1, stepSize)}
+                    style={{
+                      width: 56, height: 56, background: "#1a3a2a", border: "1px solid #166534",
+                      borderRadius: 10, color: "#4ade80", fontSize: 24, fontWeight: 700,
+                      cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                    }}
+                  >
+                    +
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
         <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
           <button
             onClick={onClose}
             style={{
               flex: 1, padding: "14px 0", background: "#1e1e1e", border: "none",
               borderRadius: 10, color: "#6b7280", fontSize: 14, fontWeight: 600, cursor: "pointer",
+              minHeight: 48,
             }}
           >
             Cancel
@@ -205,6 +280,7 @@ function InputModal({ title, fields, onSubmit, onClose }: {
             style={{
               flex: 2, padding: "14px 0", background: "#1a3a2a", border: "1px solid #166534",
               borderRadius: 10, color: "#4ade80", fontSize: 14, fontWeight: 700, cursor: "pointer",
+              minHeight: 48,
             }}
           >
             Confirm
@@ -217,7 +293,11 @@ function InputModal({ title, fields, onSubmit, onClose }: {
 
 // ─── Panels ───────────────────────────────────────────────────────────────────
 
-function ActiveWorkOrder({ wo, onConsume }: { wo: WorkOrder; onConsume?: (componentId: string, lotId: string) => void }) {
+function ActiveWorkOrder({ wo, onConsume, onScanLot }: {
+  wo: WorkOrder;
+  onConsume?: (componentId: string, lotId: string) => void;
+  onScanLot?: () => void;
+}) {
   const [open, setOpen] = useState(true);
   const total = wo.components.length;
   const done = wo.components.filter(c => c.consumed >= c.required).length;
@@ -244,12 +324,27 @@ function ActiveWorkOrder({ wo, onConsume }: { wo: WorkOrder; onConsume?: (compon
           <span style={{ fontSize: 11, color: "#6b7280", whiteSpace: "nowrap", fontFamily: "'DM Mono', monospace" }}>{done}/{total}</span>
         </div>
 
-        <button
-          onClick={() => setOpen(o => !o)}
-          style={{ background: "none", border: "none", color: "#6b7280", fontSize: 12, cursor: "pointer", padding: 0, marginBottom: open ? 10 : 0 }}
-        >
-          {open ? "▾ Hide components" : "▸ Show components"}
-        </button>
+        {/* Action row: toggle + scan */}
+        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: open ? 10 : 0 }}>
+          <button
+            onClick={() => setOpen(o => !o)}
+            style={{ background: "none", border: "none", color: "#6b7280", fontSize: 12, cursor: "pointer", padding: 0 }}
+          >
+            {open ? "▾ Hide components" : "▸ Show components"}
+          </button>
+          {onScanLot && (
+            <button
+              onClick={onScanLot}
+              style={{
+                marginLeft: "auto", background: "#1a2a3a", border: "1px solid #1e3a5f",
+                color: "#60a5fa", borderRadius: 8, padding: "6px 14px", fontSize: 12,
+                fontWeight: 700, cursor: "pointer", minHeight: 36,
+              }}
+            >
+              📷 Scan Lot
+            </button>
+          )}
+        </div>
 
         {open && wo.components.map(c => {
           const compDone = c.consumed >= c.required;
@@ -365,6 +460,7 @@ function Inbound({ transfers }: { transfers: InboundTransfer[] }) {
 
 const TABS = [
   { id: "work-order", label: "Work Order", icon: "⚙️" },
+  { id: "equipment",  label: "Equipment",  icon: "🏭" },
   { id: "on-hand",    label: "On Hand",    icon: "📦" },
   { id: "inbound",    label: "Inbound",    icon: "🚚" },
 ];
@@ -376,16 +472,62 @@ export default function StationDashboard() {
   const params = new URLSearchParams(window.location.search);
   const workCenterCode = params.get("wc") || "MIX-01";
 
+  // ─── Auth: Badge scan login ───────────────────────────────────────────
+  const [operator, setOperator] = useState<OperatorSession | null>(() => {
+    // Restore session from localStorage
+    try {
+      const raw = localStorage.getItem("tim_operator");
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  });
+
+  function handleLogin(op: { id: string; shift: "FIRST" | "SECOND" | "THIRD" }) {
+    const session: OperatorSession = { id: op.id, shift: op.shift };
+    setOperator(session);
+    localStorage.setItem("tim_operator", JSON.stringify(session));
+    // Initialize audio context on first user interaction
+    initAudio();
+  }
+
+  function handleLogout() {
+    setOperator(null);
+    localStorage.removeItem("tim_operator");
+  }
+
+  // Show badge login if not authenticated
+  if (!operator) {
+    return <BadgeLogin workCenterCode={workCenterCode} onLogin={handleLogin} />;
+  }
+
+  return (
+    <StationDashboardInner
+      workCenterCode={workCenterCode}
+      operator={operator}
+      onLogout={handleLogout}
+    />
+  );
+}
+
+// ─── Inner Dashboard (after login) ────────────────────────────────────────────
+
+function StationDashboardInner({ workCenterCode, operator, onLogout }: {
+  workCenterCode: string;
+  operator: OperatorSession;
+  onLogout: () => void;
+}) {
   const [tab, setTab] = useState("work-order");
   const [lastSync, setLastSync] = useState(new Date());
   const [syncing, setSyncing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [online, setOnline] = useState(isOnline());
 
   // Live data from API
   const [workOrder, setWorkOrder] = useState<WorkOrder | null>(null);
   const [lots, setLots] = useState<OnHandLot[]>([]);
   const [transfers, setTransfers] = useState<InboundTransfer[]>([]);
+  const [equipment, setEquipment] = useState<EquipmentSummary[]>([]);
+  const [selectedEquipment, setSelectedEquipment] = useState<string | undefined>();
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
   const [modal, setModal] = useState<{
     type: "consume" | "produce";
@@ -395,8 +537,94 @@ export default function StationDashboard() {
     remaining?: number;
     uom?: string;
   } | null>(null);
+  const [showScanModal, setShowScanModal] = useState(false);
+  const queueSize = getQueueSize();
 
-  // Fetch all station data
+  // ─── Online/Offline detection ─────────────────────────────────────────
+  useEffect(() => {
+    return onConnectivityChange(setOnline);
+  }, []);
+
+  // ─── Socket.IO real-time events ───────────────────────────────────────
+  useEffect(() => {
+    // Connect to event bus
+    socketManager.connect("default");
+
+    const handleEquipmentChange = (evt: any) => {
+      setEquipment(prev => prev.map(eq =>
+        eq.id === evt.equipmentId
+          ? { ...eq, status: evt.status, statusSince: evt.statusSince }
+          : eq
+      ));
+      // Sound/vibration alerts
+      if (evt.status === "DOWN") {
+        alertMachineDown();
+        showToast(`⬇ ${evt.code} went DOWN`, "error");
+      } else if (evt.previousStatus === "DOWN") {
+        alertMachineUp();
+        showToast(`✓ ${evt.code} back up`, "success");
+      }
+    };
+
+    const handleDowntimeAlert = (evt: any) => {
+      showToast(`⚠ ${evt.equipmentCode} — ${evt.reasonCode}`, "error");
+      alertMachineDown();
+      // Refresh equipment data
+      loadEquipment();
+    };
+
+    const handleDowntimeResolved = (evt: any) => {
+      const mins = evt.durationMin ? Math.round(evt.durationMin) : 0;
+      showToast(`✓ ${evt.equipmentCode} back up after ${mins}m`, "success");
+      alertMachineUp();
+      loadEquipment();
+    };
+
+    const handleQueueUpdated = () => {
+      // Auto-refresh work order and on-hand data
+      alertNotification();
+      loadData();
+    };
+
+    socketManager.on("equipmentStateChanged", handleEquipmentChange);
+    socketManager.on("downtimeAlert", handleDowntimeAlert);
+    socketManager.on("downtimeResolved", handleDowntimeResolved);
+    socketManager.on("queueUpdated", handleQueueUpdated);
+
+    return () => {
+      socketManager.off("equipmentStateChanged", handleEquipmentChange);
+      socketManager.off("downtimeAlert", handleDowntimeAlert);
+      socketManager.off("downtimeResolved", handleDowntimeResolved);
+      socketManager.off("queueUpdated", handleQueueUpdated);
+      socketManager.disconnect();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function showToast(msg: string, type: "success" | "error") {
+    setToast({ msg, type });
+  }
+
+  // Clear toast after 3s
+  useEffect(() => {
+    if (!toast) return;
+    const id = setTimeout(() => setToast(null), 3000);
+    return () => clearTimeout(id);
+  }, [toast]);
+
+  // ─── Data loading ─────────────────────────────────────────────────────
+  const loadEquipment = useCallback(async () => {
+    try {
+      const eqRes = await getEquipment(workCenterCode);
+      setEquipment(eqRes.equipment);
+      cacheData(`equipment_${workCenterCode}`, eqRes.equipment);
+    } catch {
+      // Use cache if available
+      const cached = getCachedData<EquipmentSummary[]>(`equipment_${workCenterCode}`);
+      if (cached) setEquipment(cached.data);
+    }
+  }, [workCenterCode]);
+
   const loadData = useCallback(async () => {
     try {
       setSyncing(true);
@@ -411,21 +639,25 @@ export default function StationDashboard() {
 
       // Map API data to UI types
       if (woRes.workOrder) {
-        setWorkOrder({
+        const woData: WorkOrder = {
           ...woRes.workOrder,
           components: woRes.workOrder.components.map(c => ({
             ...c,
             matNum: c.materialNumber,
           })),
-        });
+        };
+        setWorkOrder(woData);
+        cacheData(`workorder_${workCenterCode}`, woData);
       } else {
         setWorkOrder(null);
       }
 
-      setLots(onHandRes.lots.map(l => ({
+      const lotsData = onHandRes.lots.map(l => ({
         ...l,
         matNum: l.materialNumber,
-      })));
+      }));
+      setLots(lotsData);
+      cacheData(`lots_${workCenterCode}`, lotsData);
 
       setTransfers(inboundRes.transfers.map(t => ({
         ...t,
@@ -437,8 +669,31 @@ export default function StationDashboard() {
       if (warnings.length > 0) {
         setError(`Partial data: ${warnings.join('; ')}`);
       }
+
+      // Flush offline queue if back online
+      if (isOnline() && getQueueSize() > 0) {
+        const synced = await flushQueue(async (action) => {
+          if (action.type === "consume") {
+            await consumeMaterial(action.payload as any);
+          } else {
+            await recordProduction(action.payload as any);
+          }
+        });
+        if (synced > 0) {
+          showToast(`✓ Synced ${synced} offline action${synced > 1 ? "s" : ""}`, "success");
+        }
+      }
     } catch (err: any) {
-      setError(err?.message || "Failed to load station data");
+      // Try to load from cache when offline
+      if (!isOnline()) {
+        const cachedWo = getCachedData<WorkOrder>(`workorder_${workCenterCode}`);
+        const cachedLots = getCachedData<OnHandLot[]>(`lots_${workCenterCode}`);
+        if (cachedWo) setWorkOrder(cachedWo.data);
+        if (cachedLots) setLots(cachedLots.data);
+        setError("Offline — showing cached data");
+      } else {
+        setError(err?.message || "Failed to load station data");
+      }
     } finally {
       setSyncing(false);
       setLoading(false);
@@ -448,18 +703,16 @@ export default function StationDashboard() {
   // Initial load + auto-refresh every 30s
   useEffect(() => {
     loadData();
-    const id = setInterval(loadData, 30000);
+    loadEquipment();
+    const id = setInterval(() => {
+      loadData();
+      loadEquipment();
+    }, 30000);
     return () => clearInterval(id);
-  }, [loadData]);
+  }, [loadData, loadEquipment]);
 
-  // Clear toast after 3s
-  useEffect(() => {
-    if (!toast) return;
-    const id = setTimeout(() => setToast(null), 3000);
-    return () => clearTimeout(id);
-  }, [toast]);
+  // ─── Handlers ─────────────────────────────────────────────────────────
 
-  // Handle material consumption — opens touch-friendly modal
   function handleConsume(componentId: string, lotId: string) {
     if (!workOrder) return;
     const comp = workOrder.components.find(c => c.id === componentId);
@@ -479,22 +732,35 @@ export default function StationDashboard() {
     const qty = Number(values.quantity);
     if (!qty || qty <= 0) { setModal(null); return; }
 
+    const payload = {
+      workOrderId: workOrder.id,
+      lotId: modal.lotId!,
+      quantity: qty,
+      operatorId: operator.id,
+    };
+
     try {
-      await consumeMaterial({
-        workOrderId: workOrder.id,
-        lotId: modal.lotId!,
-        quantity: qty,
-      });
-      setToast({ msg: `✓ Added ${fmtQty(qty)} ${modal.uom} of ${modal.material}`, type: "success" });
+      if (isOnline()) {
+        await consumeMaterial(payload);
+      } else {
+        enqueueAction("consume", payload);
+      }
+      alertSuccess();
+      showToast(`✓ Added ${fmtQty(qty)} ${modal.uom} of ${modal.material}`, "success");
       setModal(null);
       loadData();
     } catch (err: any) {
-      setToast({ msg: err?.message || "Failed to consume material", type: "error" });
+      // Queue offline if network error
+      if (!isOnline()) {
+        enqueueAction("consume", payload);
+        showToast(`📋 Queued offline — will sync when back`, "success");
+      } else {
+        showToast(err?.message || "Failed to consume material", "error");
+      }
       setModal(null);
     }
   }
 
-  // Handle production output — opens touch-friendly modal
   function handleProduce() {
     if (!workOrder) return;
     setModal({ type: "produce", uom: workOrder.components[0]?.uom || "LB" });
@@ -506,23 +772,74 @@ export default function StationDashboard() {
     const uom = values.uom || "LB";
     if (!qty || qty <= 0) { setModal(null); return; }
 
+    const payload = {
+      workOrderId: workOrder.id,
+      quantity: qty,
+      uom,
+      operatorId: operator.id,
+    };
+
     try {
-      await recordProduction({
-        workOrderId: workOrder.id,
-        quantity: qty,
-        uom,
-      });
-      setToast({ msg: `✓ Recorded ${fmtQty(qty)} ${uom} production output`, type: "success" });
+      if (isOnline()) {
+        await recordProduction(payload);
+      } else {
+        enqueueAction("produce", payload);
+      }
+      alertSuccess();
+      showToast(`✓ Recorded ${fmtQty(qty)} ${uom} production output`, "success");
       setModal(null);
       loadData();
     } catch (err: any) {
-      setToast({ msg: err?.message || "Failed to record production", type: "error" });
+      if (!isOnline()) {
+        enqueueAction("produce", payload);
+        showToast(`📋 Queued offline — will sync when back`, "success");
+      } else {
+        showToast(err?.message || "Failed to record production", "error");
+      }
       setModal(null);
     }
   }
 
+  function handleScanLot(lotValue: string) {
+    setShowScanModal(false);
+    if (!workOrder) return;
+
+    // Find a matching lot in on-hand inventory by lot number or ID
+    const matchedLot = lots.find(
+      l => l.lotNumber === lotValue || l.id === lotValue,
+    );
+
+    if (matchedLot) {
+      // Find the component that needs this material
+      const comp = workOrder.components.find(
+        c => c.materialNumber === matchedLot.materialNumber && c.consumed < c.required,
+      );
+      if (comp) {
+        setModal({
+          type: "consume",
+          componentId: comp.id,
+          lotId: matchedLot.id,
+          material: comp.material,
+          remaining: comp.required - comp.consumed,
+          uom: comp.uom,
+        });
+        return;
+      }
+    }
+
+    // Fallback: show toast indicating lot not found
+    showToast(`Lot "${lotValue}" not found in on-hand inventory`, "error");
+  }
+
+  function handleEquipmentRefresh() {
+    loadEquipment();
+    loadData();
+  }
+
   const flagCount = lots.filter(l => l.status === "QUARANTINED" || l.labResult === "FAIL").length;
   const missingLots = workOrder?.components.filter(c => !c.lotId).length ?? 0;
+  const downCount = equipment.filter(e => e.status === "DOWN").length;
+  const selectedEq = equipment.find(e => e.id === selectedEquipment) || null;
 
   return (
     <div style={{ minHeight: "100vh", background: "#0a0a0a", color: "#f1f5f9", fontFamily: "'DM Sans', 'Segoe UI', sans-serif", display: "flex", flexDirection: "column", maxWidth: 600, margin: "0 auto" }}>
@@ -544,14 +861,40 @@ export default function StationDashboard() {
           border: `1px solid ${toast.type === "success" ? "#166534" : "#7f1d1d"}`,
           color: toast.type === "success" ? "#4ade80" : "#fca5a5",
           borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 600,
-          zIndex: 1000, boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
+          zIndex: 1100, boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
+          maxWidth: "90vw",
         }}>
           {toast.msg}
         </div>
       )}
 
+      {/* Offline banner */}
+      {!online && (
+        <div style={{
+          background: "#92400e", padding: "8px 16px", textAlign: "center",
+          fontSize: 13, fontWeight: 700, color: "#fef3c7",
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+        }}>
+          <span style={{ fontSize: 16 }}>⚡</span>
+          OFFLINE — actions will sync when back
+          {queueSize > 0 && (
+            <span style={{ background: "#78350f", borderRadius: 4, padding: "2px 8px", fontSize: 11 }}>
+              {queueSize} queued
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Shift banner */}
+      <ShiftBanner
+        operatorId={operator.id}
+        shift={operator.shift}
+        workCenterCode={workCenterCode}
+        onLogout={onLogout}
+      />
+
       {/* Header */}
-      <div style={{ background: "#0d0d0d", borderBottom: "1px solid #1a1a1a", padding: "12px 16px" }}>
+      <div style={{ background: "#0d0d0d", borderBottom: "1px solid #1a1a1a", padding: "10px 16px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
@@ -563,9 +906,9 @@ export default function StationDashboard() {
           </div>
           <div style={{ textAlign: "right" }}>
             <button
-              onClick={loadData}
+              onClick={() => { loadData(); loadEquipment(); }}
               disabled={syncing}
-              style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 6, color: syncing ? "#4b5563" : "#6b7280", fontSize: 11, padding: "5px 10px", cursor: syncing ? "default" : "pointer", fontFamily: "'DM Mono', monospace", display: "block", marginLeft: "auto", marginBottom: 4 }}
+              style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 6, color: syncing ? "#4b5563" : "#6b7280", fontSize: 11, padding: "5px 10px", cursor: syncing ? "default" : "pointer", fontFamily: "'DM Mono', monospace", display: "block", marginLeft: "auto", marginBottom: 4, minHeight: 28 }}
             >
               {syncing ? "syncing…" : "↻ sync"}
             </button>
@@ -576,8 +919,13 @@ export default function StationDashboard() {
         </div>
 
         {/* Alert pills */}
-        {(flagCount > 0 || missingLots > 0) && (
-          <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
+        {(flagCount > 0 || missingLots > 0 || downCount > 0) && (
+          <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+            {downCount > 0 && (
+              <span style={{ background: "#2d1010", border: "1px solid #7f1d1d", color: "#fca5a5", borderRadius: 6, padding: "3px 9px", fontSize: 11, fontWeight: 700 }}>
+                🔴 {downCount} machine{downCount > 1 ? "s" : ""} down
+              </span>
+            )}
             {flagCount > 0 && (
               <span style={{ background: "#2d1010", border: "1px solid #7f1d1d", color: "#fca5a5", borderRadius: 6, padding: "3px 9px", fontSize: 11, fontWeight: 700 }}>
                 ⚠ {flagCount} flagged lot{flagCount > 1 ? "s" : ""}
@@ -593,31 +941,39 @@ export default function StationDashboard() {
 
         {/* Error banner */}
         {error && (
-          <div style={{ marginTop: 10, background: "#2d1010", border: "1px solid #7f1d1d", borderRadius: 8, padding: "8px 14px", fontSize: 12, color: "#fca5a5" }}>
+          <div style={{ marginTop: 8, background: "#2d1010", border: "1px solid #7f1d1d", borderRadius: 8, padding: "8px 14px", fontSize: 12, color: "#fca5a5" }}>
             {error}
           </div>
         )}
       </div>
 
-      {/* Tab bar */}
+      {/* Tab bar — bigger touch targets */}
       <div style={{ display: "flex", borderBottom: "1px solid #1a1a1a", background: "#0d0d0d" }}>
         {TABS.map(t => {
           const active = tab === t.id;
+          const badge = t.id === "equipment" && downCount > 0;
           return (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
               style={{
-                flex: 1, padding: "11px 0", background: "none", border: "none",
+                flex: 1, padding: "12px 0", background: "none", border: "none",
                 borderBottom: active ? "2px solid #3b82f6" : "2px solid transparent",
                 color: active ? "#60a5fa" : "#4b5563",
-                fontSize: 12, fontWeight: active ? 700 : 500,
+                fontSize: 11, fontWeight: active ? 700 : 500,
                 cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-                transition: "color 0.15s",
+                transition: "color 0.15s", position: "relative",
+                minHeight: 52,
               }}
             >
-              <span style={{ display: "block", fontSize: 16, marginBottom: 2 }}>{t.icon}</span>
+              <span style={{ display: "block", fontSize: 18, marginBottom: 2 }}>{t.icon}</span>
               {t.label}
+              {badge && (
+                <span style={{
+                  position: "absolute", top: 6, right: "50%", transform: "translateX(14px)",
+                  width: 8, height: 8, borderRadius: "50%", background: "#ef4444",
+                }} />
+              )}
             </button>
           );
         })}
@@ -635,15 +991,20 @@ export default function StationDashboard() {
             {tab === "work-order" && (
               workOrder ? (
                 <>
-                  <ActiveWorkOrder wo={workOrder} onConsume={handleConsume} />
+                  <ActiveWorkOrder
+                    wo={workOrder}
+                    onConsume={handleConsume}
+                    onScanLot={() => setShowScanModal(true)}
+                  />
                   {/* Record production button */}
                   <div style={{ marginTop: 16 }}>
                     <button
                       onClick={handleProduce}
                       style={{
-                        width: "100%", padding: "14px 0", background: "#1a3a2a", border: "1px solid #166534",
-                        borderRadius: 10, color: "#4ade80", fontSize: 14, fontWeight: 700, cursor: "pointer",
+                        width: "100%", padding: "16px 0", background: "#1a3a2a", border: "2px solid #166534",
+                        borderRadius: 12, color: "#4ade80", fontSize: 15, fontWeight: 700, cursor: "pointer",
                         fontFamily: "'DM Sans', sans-serif", letterSpacing: "0.02em",
+                        minHeight: 56,
                       }}
                     >
                       ✓ Record Production Output
@@ -657,6 +1018,27 @@ export default function StationDashboard() {
                 </div>
               )
             )}
+
+            {tab === "equipment" && (
+              <>
+                <SectionHeader icon="🏭" title="Equipment Status" accent="#60a5fa" />
+                <EquipmentTiles
+                  equipment={equipment}
+                  selectedId={selectedEquipment}
+                  onSelect={eq => setSelectedEquipment(eq.id === selectedEquipment ? undefined : eq.id)}
+                />
+                {selectedEquipment && (
+                  <div style={{ marginTop: 16 }}>
+                    <DowntimeGrid
+                      equipment={selectedEq}
+                      onDowntimeLogged={handleEquipmentRefresh}
+                      onToast={showToast}
+                    />
+                  </div>
+                )}
+              </>
+            )}
+
             {tab === "on-hand" && <OnHand lots={lots} />}
             {tab === "inbound" && <Inbound transfers={transfers} />}
           </>
@@ -665,8 +1047,11 @@ export default function StationDashboard() {
 
       {/* Footer */}
       <div style={{ borderTop: "1px solid #1a1a1a", padding: "8px 16px", background: "#0d0d0d", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ fontSize: 10, color: "#374151", fontFamily: "'DM Mono', monospace" }}>SAP · {workCenterCode} · TiM</span>
-        <span style={{ fontSize: 10, color: error ? "#f87171" : "#1d4ed8", fontFamily: "'DM Mono', monospace" }}>{error ? "● OFFLINE" : "● ONLINE"}</span>
+        <span style={{ fontSize: 10, color: "#374151", fontFamily: "'DM Mono', monospace" }}>{workCenterCode} · TiM</span>
+        <span style={{ fontSize: 10, color: online ? "#1d4ed8" : "#f87171", fontFamily: "'DM Mono', monospace" }}>
+          {online ? "● ONLINE" : "● OFFLINE"}
+          {queueSize > 0 && ` · ${queueSize} queued`}
+        </span>
       </div>
 
       {/* Touch-friendly input modals */}
@@ -679,6 +1064,7 @@ export default function StationDashboard() {
               key: "quantity",
               type: "number",
               placeholder: `Enter ${modal.uom}`,
+              step: 0.5,
             },
           ]}
           onSubmit={submitConsume}
@@ -689,11 +1075,20 @@ export default function StationDashboard() {
         <InputModal
           title="Record Production Output"
           fields={[
-            { label: "Finished product weight", key: "quantity", type: "number", placeholder: "Enter weight" },
+            { label: "Finished product weight", key: "quantity", type: "number", placeholder: "Enter weight", step: 1 },
             { label: "Unit of measure", key: "uom", defaultValue: modal.uom || "LB", placeholder: "LB, KG, etc" },
           ]}
           onSubmit={submitProduce}
           onClose={() => setModal(null)}
+        />
+      )}
+
+      {/* Barcode scan modal */}
+      {showScanModal && (
+        <ScanModal
+          title="Scan Lot Barcode"
+          onScan={handleScanLot}
+          onClose={() => setShowScanModal(false)}
         />
       )}
     </div>

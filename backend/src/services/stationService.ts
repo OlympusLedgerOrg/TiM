@@ -331,7 +331,7 @@ export async function consumeMaterial(opts: {
       where: { id: opts.lotId },
       data: {
         quantity: { decrement: opts.quantity },
-        status: (lot.quantity - opts.quantity) <= 0 ? 'CONSUMED' : lot.status,
+        status: (lot.quantity - opts.quantity) < 0.001 ? 'CONSUMED' : lot.status,
       },
     }),
   ]);

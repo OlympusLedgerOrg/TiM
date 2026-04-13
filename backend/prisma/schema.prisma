@@ -111,12 +111,14 @@ model WorkOrder {
   updatedAt      DateTime        @updatedAt
 
   // --- Production relations ---
-  workOrderSteps     WorkOrderStep[]
+  workOrderSteps     WorkOrderStep[]  // Advanced MES step execution with operator tracking
   reservations       Reservation[]
   outputLots         Lot[]
   inventoryMovements InventoryMovement[]
 }
 
+// Step: Simple step model for basic work order tracking
+// Used by the original work order system for straightforward step completion
 model Step {
   id          String     @id @default(cuid())
   tenantId    String     @default("default")
@@ -372,6 +374,9 @@ model BOMStep {
 // WORK ORDER EXECUTION (PRODUCTION LAYER)
 //////////////////////////////////////////////////////
 
+// WorkOrderStep: Advanced MES step execution model
+// Used for production tracking with BOM steps, operator assignment, and data recording
+// Distinct from Step model which is for simple work order tracking
 model WorkOrderStep {
   id            String   @id @default(uuid())
 

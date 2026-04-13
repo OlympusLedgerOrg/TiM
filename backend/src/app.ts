@@ -11,6 +11,7 @@ import labReportRoutes from './routes/labReports.js';
 import sapRoutes from './routes/sap.js';
 import sapMiddlewareRoutes from './routes/sapMiddleware.js';
 import stationRoutes from './routes/station.js';
+import allocationRoutes from './routes/allocation.js';
 import { globalLimiter, sapLimiter } from './middleware/rateLimiter.js';
 import { httpsRedirect } from './middleware/httpsRedirect.js';
 import type { Role } from './middleware/auth.js';
@@ -89,6 +90,7 @@ app.use('/api/v1/lab-reports', labReportRoutes);
 app.use('/api/v1/sap', sapLimiter, sapRoutes);
 app.use('/api/v1/sap/middleware', sapLimiter, sapMiddlewareRoutes);
 app.use('/api/v1/station', stationRoutes);
+app.use('/api/v1/allocation', allocationRoutes);
 
 // Socket.IO connection handling with tenant validation
 io.on('connection', (socket) => {

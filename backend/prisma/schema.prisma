@@ -81,9 +81,9 @@ enum DowntimeCategory {
 }
 
 enum ShiftPattern {
-  FIRST    // 6am-2pm
-  SECOND   // 2pm-10pm
-  THIRD    // 10pm-6am
+  FIRST    // 7am-3pm
+  SECOND   // 3pm-11pm
+  THIRD    // 11pm-7am
 }
 
 enum AlertSeverity {

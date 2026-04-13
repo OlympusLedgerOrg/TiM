@@ -10,6 +10,7 @@ import movementRoutes from './routes/movements.js';
 import labReportRoutes from './routes/labReports.js';
 import sapRoutes from './routes/sap.js';
 import sapMiddlewareRoutes from './routes/sapMiddleware.js';
+import stationRoutes from './routes/station.js';
 import { globalLimiter, sapLimiter } from './middleware/rateLimiter.js';
 import { httpsRedirect } from './middleware/httpsRedirect.js';
 import type { Role } from './middleware/auth.js';
@@ -87,6 +88,7 @@ app.use('/api/v1/movements', movementRoutes);
 app.use('/api/v1/lab-reports', labReportRoutes);
 app.use('/api/v1/sap', sapLimiter, sapRoutes);
 app.use('/api/v1/sap/middleware', sapLimiter, sapMiddlewareRoutes);
+app.use('/api/v1/station', stationRoutes);
 
 // Socket.IO connection handling with tenant validation
 io.on('connection', (socket) => {

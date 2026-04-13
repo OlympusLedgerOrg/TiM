@@ -95,8 +95,11 @@ function saveQueue(queue: QueuedAction[]): void {
 }
 
 export function enqueueAction(type: 'consume' | 'produce', payload: Record<string, unknown>): QueuedAction {
+  const id = typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   const action: QueuedAction = {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    id,
     type,
     payload,
     createdAt: new Date().toISOString(),

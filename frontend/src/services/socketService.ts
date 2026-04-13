@@ -52,8 +52,9 @@ export interface QueueUpdatedEvent {
 type Listener = (...args: any[]) => void;
 
 // ─── Lightweight Socket Manager (no socket.io-client dependency) ──────────────
-// Uses Server-Sent Events pattern via polling since we can't add socket.io-client
-// without npm install. Instead we simulate real-time with smart polling + event bus.
+// Uses a local event bus pattern with smart polling. The StationDashboard polls
+// the API and emits events locally on diff detection. When socket.io-client is
+// added as a dependency, this will upgrade to true WebSocket connections.
 
 class SocketManager {
   private listeners: Map<string, Set<Listener>> = new Map();
@@ -64,9 +65,9 @@ class SocketManager {
 
   /**
    * Connect to the real-time event stream.
-   * For now this uses an event bus pattern — the StationDashboard polls
-   * and emits events locally. When socket.io-client is added as a dependency,
-   * this will upgrade to true WebSocket connections transparently.
+   * Currently uses a local event bus — the StationDashboard polls and emits
+   * events locally. When socket.io-client is added as a dependency, this will
+   * upgrade to true WebSocket connections transparently.
    */
   connect(tenantId: string) {
     this.tenantId = tenantId;
@@ -102,7 +103,12 @@ class SocketManager {
   /** Emit an event to all local listeners */
   emit(event: string, data: unknown) {
     this.listeners.get(event)?.forEach(fn => {
-      try { fn(data); } catch { /* non-blocking */ }
+      try { fn(data); } catch (err) {
+        // Log in dev; non-blocking so other listeners still fire
+        if (typeof console !== "undefined") {
+          console.warn(`[SocketManager] Listener error on "${event}":`, err);
+        }
+      }
     });
   }
 

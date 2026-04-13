@@ -61,7 +61,8 @@ export default function BadgeLogin({ workCenterCode, onLogin }: BadgeLoginProps)
         assignment: {
           id: result.assignment.id,
           operatorId: id,
-          operatorName: id, // The API returns limited data; we use badge ID as display
+          // TODO: Extend clock-in API to return operator name from the Operator model
+          operatorName: id,
           badgeId: id,
           shift,
           date: new Date().toISOString().slice(0, 10),

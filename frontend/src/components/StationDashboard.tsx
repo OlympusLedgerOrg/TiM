@@ -674,9 +674,11 @@ function StationDashboardInner({ workCenterCode, operator, onLogout }: {
       if (isOnline() && getQueueSize() > 0) {
         const synced = await flushQueue(async (action) => {
           if (action.type === "consume") {
-            await consumeMaterial(action.payload as any);
+            const p = action.payload as { workOrderId: string; lotId: string; quantity: number; operatorId?: string };
+            await consumeMaterial(p);
           } else {
-            await recordProduction(action.payload as any);
+            const p = action.payload as { workOrderId: string; quantity: number; uom: string; operatorId?: string };
+            await recordProduction(p);
           }
         });
         if (synced > 0) {

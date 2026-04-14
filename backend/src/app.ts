@@ -4,7 +4,6 @@ import { Server } from 'socket.io';
 import { createServer } from 'http';
 import { jwtVerify } from 'jose';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import workOrderRoutes from './routes/workOrders.js';
 import healthRoutes from './routes/health.js';
 import queueRoutes from './routes/queue.js';
@@ -24,10 +23,6 @@ import authRoutes from './routes/auth.js';
 import { globalLimiter, sapLimiter } from './middleware/rateLimiter.js';
 import { httpsRedirect } from './middleware/httpsRedirect.js';
 import type { Role } from './middleware/auth.js';
-
-// Get directory name for ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const app = express();
 const httpServer = createServer(app);
@@ -125,7 +120,13 @@ if (staticFilesPath) {
     if (req.path.startsWith('/api') || req.path.startsWith('/health') || req.path.startsWith('/socket.io')) {
       return next();
     }
-    res.sendFile(path.join(staticFilesPath, 'index.html'));
+    const indexPath = path.join(staticFilesPath, 'index.html');
+    res.sendFile(indexPath, (err) => {
+      if (err) {
+        console.error(`Failed to serve index.html: ${err.message}`);
+        res.status(500).send('Application files not found. Please reinstall the application.');
+      }
+    });
   });
 
   console.log(`📦 Desktop mode: serving frontend from ${staticFilesPath}`);

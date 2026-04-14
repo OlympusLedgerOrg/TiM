@@ -31,7 +31,8 @@ const config: ForgeConfig = {
       name: 'TiM',
       setupExe: 'TiM-Setup.exe',
       setupIcon: './assets/icon.ico',
-      iconUrl: 'https://raw.githubusercontent.com/OlympusLedgerOrg/TiM/main/desktop/assets/icon.ico',
+      // iconUrl is optional - uses setupIcon if URL is unavailable
+      // iconUrl: 'https://raw.githubusercontent.com/OlympusLedgerOrg/TiM/main/desktop/assets/icon.ico',
       loadingGif: './assets/installing.gif',
       description: 'TiM — Work Order Management System',
       authors: 'TiM Development Team',

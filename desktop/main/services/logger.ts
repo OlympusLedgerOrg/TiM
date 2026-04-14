@@ -94,6 +94,8 @@ class Logger {
 
   /**
    * Log an error message
+   * @param message - The error message to log
+   * @param args - Additional values to include in the log entry
    */
   error(message: string, ...args: unknown[]): void {
     this.log('error', message, ...args);

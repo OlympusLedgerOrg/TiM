@@ -9,7 +9,7 @@
  * - Graceful shutdown
  */
 
-import { ChildProcess, spawn, fork } from 'child_process';
+import { ChildProcess, spawn } from 'child_process';
 import path from 'path';
 import { getBackendPath, getConfig, getFrontendPath } from '../setup.js';
 import { logger } from './logger.js';

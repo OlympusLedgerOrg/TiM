@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { SignJWT } from 'jose';
-import { timingSafeEqual } from 'crypto';
+import bcrypt from 'bcryptjs';
 import { prisma } from '../prisma/client.js';
 import { authLimiter } from '../middleware/rateLimiter.js';
 import type { Role } from '../middleware/auth.js';
@@ -12,22 +12,9 @@ const router = Router();
  * Auth Routes — Login for supervisors/managers.
  *
  * Floor workers use badge scan (handled in equipment/shifts/clock-in).
- * This provides a proper email + password login for management users.
- *
- * BOOTSTRAP MODE: Uses env-based ADMIN_PASSWORD for initial setup.
- * TODO: Replace with bcrypt/argon2 password hashing and per-user stored hashes
- * once a user registration flow is implemented.
+ * This provides email + password login with bcrypt-hashed passwords
+ * for management users (Supervisor, Admin).
  */
-
-/**
- * Timing-safe string comparison to prevent timing attacks.
- * Both strings are padded to equal length before comparison.
- */
-function safeCompare(a: string, b: string): boolean {
-  const bufA = Buffer.from(a.padEnd(256, '\0'));
-  const bufB = Buffer.from(b.padEnd(256, '\0'));
-  return timingSafeEqual(bufA, bufB);
-}
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -52,20 +39,23 @@ router.post('/login', authLimiter, async (req, res) => {
     return res.status(401).json({ message: 'Invalid email or password' });
   }
 
-  // Bootstrap mode: compare against env-based password using timing-safe comparison
-  // TODO: Replace with bcrypt.compare(password, user.passwordHash) once per-user hashes exist
-  const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
-  if (!safeCompare(password, adminPassword)) {
+  // Verify bcrypt password hash — users without a passwordHash cannot log in via email
+  if (!user.passwordHash) {
     return res.status(401).json({ message: 'Invalid email or password' });
   }
 
-  // Generate JWT
+  const passwordValid = await bcrypt.compare(password, user.passwordHash);
+  if (!passwordValid) {
+    return res.status(401).json({ message: 'Invalid email or password' });
+  }
+
+  // Generate JWT with sub, role, tenantId, and name claims
   const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'change-me');
   const token = await new SignJWT({
     sub: user.id,
     role: user.role as Role,
     tenantId: user.tenantId,
-    email: user.email,
+    name: user.name,
   })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()

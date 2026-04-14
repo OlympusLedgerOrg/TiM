@@ -72,11 +72,11 @@ function App() {
           }
         />
 
-        {/* Management: Plant-wide analytics dashboard */}
+        {/* Management: Plant-wide analytics dashboard (Admin only) */}
         <Route
           path="/management"
           element={
-            <RequireRole allowed={['Supervisor', 'Admin']}>
+            <RequireRole allowed={['Admin']}>
               <ManagementDashboard />
             </RequireRole>
           }

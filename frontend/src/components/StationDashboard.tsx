@@ -36,6 +36,7 @@ import ShiftBanner from "./ShiftBanner";
 import EquipmentTiles from "./EquipmentTiles";
 import DowntimeGrid from "./DowntimeGrid";
 import ScanModal from "./ScanModal";
+import QrPrintModal, { type QrLabelData } from "./QrPrintModal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -396,7 +397,7 @@ function ActiveWorkOrder({ wo, onConsume, onScanLot }: {
   );
 }
 
-function OnHand({ lots }: { lots: OnHandLot[] }) {
+function OnHand({ lots, onPrintQr }: { lots: OnHandLot[]; onPrintQr?: (lot: OnHandLot) => void }) {
   const flagged = lots.filter(l => l.status === "QUARANTINED" || l.labResult === "FAIL");
   return (
     <section>
@@ -419,9 +420,22 @@ function OnHand({ lots }: { lots: OnHandLot[] }) {
                 <QtyDisplay quantity={l.quantity} uom={l.uom} />
               </div>
             </div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
               <StatusBadge status={l.status} labResult={l.labResult} />
               {l.expiresAt && <ExpiryChip dateStr={l.expiresAt} />}
+              {onPrintQr && (
+                <button
+                  onClick={() => onPrintQr(l)}
+                  style={{
+                    marginLeft: "auto", background: "#1a1a2e", border: "1px solid #3b3b6b",
+                    color: "#a78bfa", borderRadius: 6, padding: "4px 12px", fontSize: 11,
+                    fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+                    minHeight: 30,
+                  }}
+                >
+                  🏷️ Print QR
+                </button>
+              )}
             </div>
           </Card>
         );
@@ -538,6 +552,7 @@ function StationDashboardInner({ workCenterCode, operator, onLogout }: {
     uom?: string;
   } | null>(null);
   const [showScanModal, setShowScanModal] = useState(false);
+  const [qrPrintLabel, setQrPrintLabel] = useState<QrLabelData | null>(null);
   const queueSize = getQueueSize();
 
   // ─── Online/Offline detection ─────────────────────────────────────────
@@ -1041,7 +1056,15 @@ function StationDashboardInner({ workCenterCode, operator, onLogout }: {
               </>
             )}
 
-            {tab === "on-hand" && <OnHand lots={lots} />}
+            {tab === "on-hand" && <OnHand lots={lots} onPrintQr={(lot) => setQrPrintLabel({
+              lotNumber: lot.lotNumber,
+              lotId: lot.id,
+              material: lot.material,
+              materialNumber: lot.matNum,
+              quantity: lot.quantity,
+              uom: lot.uom,
+              expiresAt: lot.expiresAt,
+            })} />}
             {tab === "inbound" && <Inbound transfers={transfers} />}
           </>
         )}
@@ -1091,6 +1114,14 @@ function StationDashboardInner({ workCenterCode, operator, onLogout }: {
           title="Scan Lot Barcode"
           onScan={handleScanLot}
           onClose={() => setShowScanModal(false)}
+        />
+      )}
+
+      {/* QR code print modal */}
+      {qrPrintLabel && (
+        <QrPrintModal
+          label={qrPrintLabel}
+          onClose={() => setQrPrintLabel(null)}
         />
       )}
     </div>

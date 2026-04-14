@@ -50,42 +50,42 @@ export default function QrPrintModal({ label, onClose }: QrPrintModalProps) {
 
   // Generate QR code on mount or when label changes
   useEffect(() => {
-    generateQR();
-  }, [label.lotNumber]);
+    async function generateQR() {
+      try {
+        setError(null);
+        // Encode lot number as QR content — compact, easy to decode
+        const qrContent = label.lotNumber;
 
-  async function generateQR() {
-    try {
-      setError(null);
-      // Encode lot number as QR content — compact, easy to decode
-      const qrContent = label.lotNumber;
-
-      const dataUrl = await QRCode.toDataURL(qrContent, {
-        errorCorrectionLevel: "H", // High correction for factory environments (dirty/damaged labels)
-        margin: 2,
-        width: 300,
-        color: {
-          dark: "#000000",
-          light: "#ffffff",
-        },
-      });
-      setQrDataUrl(dataUrl);
-
-      // Also render to the preview canvas
-      if (canvasRef.current) {
-        await QRCode.toCanvas(canvasRef.current, qrContent, {
-          errorCorrectionLevel: "H",
+        const dataUrl = await QRCode.toDataURL(qrContent, {
+          errorCorrectionLevel: "H", // High correction for factory environments (dirty/damaged labels)
           margin: 2,
-          width: 200,
+          width: 300,
           color: {
             dark: "#000000",
             light: "#ffffff",
           },
         });
+        setQrDataUrl(dataUrl);
+
+        // Also render to the preview canvas
+        if (canvasRef.current) {
+          await QRCode.toCanvas(canvasRef.current, qrContent, {
+            errorCorrectionLevel: "H",
+            margin: 2,
+            width: 200,
+            color: {
+              dark: "#000000",
+              light: "#ffffff",
+            },
+          });
+        }
+      } catch (err: any) {
+        setError(err?.message || "Failed to generate QR code");
       }
-    } catch (err: any) {
-      setError(err?.message || "Failed to generate QR code");
     }
-  }
+
+    generateQR();
+  }, [label.lotNumber]);
 
   function handlePrint() {
     if (!qrDataUrl) return;
@@ -102,7 +102,7 @@ export default function QrPrintModal({ label, onClose }: QrPrintModalProps) {
       : "";
 
     // Build label HTML for N copies
-    const labelHtml = Array.from({ length: copies }, (_, i) => `
+    const labelHtml = Array.from({ length: copies }, () => `
       <div class="label" style="
         width: ${s.width}; 
         padding: 8px; 

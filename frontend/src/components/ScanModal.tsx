@@ -33,6 +33,9 @@ export default function ScanModal({ title, onScan, onClose }: ScanModalProps) {
   const [scanning, setScanning] = useState(false);
   const [lastScanned, setLastScanned] = useState<string | null>(null);
 
+  // Track last scanned value to deduplicate rapid repeated scans
+  const lastScannedRef = useRef<string | null>(null);
+
   // Stabilize the onScan callback to avoid re-triggering effects
   const onScanRef = useRef(onScan);
   onScanRef.current = onScan;
@@ -61,7 +64,8 @@ export default function ScanModal({ title, onScan, onClose }: ScanModalProps) {
         },
         (decodedText) => {
           // Deduplicate rapid scans of the same code
-          if (decodedText === scannerRef.current?.getState?.toString()) return;
+          if (decodedText === lastScannedRef.current) return;
+          lastScannedRef.current = decodedText;
           setLastScanned(decodedText);
 
           // Haptic feedback
@@ -111,15 +115,22 @@ export default function ScanModal({ title, onScan, onClose }: ScanModalProps) {
 
   // Start/stop camera when mode changes
   useEffect(() => {
+    let cancelled = false;
+
     if (mode === "camera") {
-      startCamera();
+      // Small guard — if the effect re-runs before startCamera resolves,
+      // the cancelled flag prevents us from operating on a stale scanner.
+      if (!cancelled) startCamera();
     } else {
       stopCamera();
       // Focus the text input after switching to manual
       setTimeout(() => inputRef.current?.focus(), 100);
     }
+
+    // Cleanup only stops the camera on unmount or when mode switches away
     return () => {
-      stopCamera();
+      cancelled = true;
+      if (mode === "camera") stopCamera();
     };
   }, [mode, startCamera, stopCamera]);
 

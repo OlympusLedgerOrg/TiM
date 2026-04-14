@@ -9,6 +9,7 @@ import SupervisorDashboard from './components/SupervisorDashboard';
 import ManagementDashboard from './components/ManagementDashboard';
 import AdminPanel from './components/AdminPanel';
 import LoginPage from './components/LoginPage';
+import ShiftReportViewer from './components/ShiftReportViewer';
 import InstallPromptBanner from './components/InstallPromptBanner';
 import './styles/fiori.css';
 
@@ -77,6 +78,16 @@ function App() {
           element={
             <RequireRole allowed={['Supervisor', 'Admin']}>
               <ManagementDashboard />
+            </RequireRole>
+          }
+        />
+
+        {/* Shift Reports: Auto-generated shift summaries */}
+        <Route
+          path="/shift-report"
+          element={
+            <RequireRole allowed={['Supervisor', 'Admin']}>
+              <ShiftReportViewer />
             </RequireRole>
           }
         />

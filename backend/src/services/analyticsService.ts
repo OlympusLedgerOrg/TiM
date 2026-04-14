@@ -557,7 +557,7 @@ export async function getScrapAnalysis(tenantId: string, periodStart: Date, peri
   // Group by material
   const byMaterial = new Map<string, { code: string; description: string; count: number; quantity: number }>();
   for (const m of scrapMovements) {
-    const matCode = m.lot?.material?.code ?? 'UNKNOWN';
+    const matCode = m.lot?.material?.sapMaterialNumber ?? 'UNKNOWN';
     const matDesc = m.lot?.material?.description ?? 'Unknown material';
     const cur = byMaterial.get(matCode) || { code: matCode, description: matDesc, count: 0, quantity: 0 };
     cur.count++;
@@ -600,7 +600,7 @@ export async function getWorkerPerformance(tenantId: string, periodStart: Date, 
       workerMap.set(key, {
         operatorId: a.operatorId,
         operatorName: a.operator.name,
-        badgeId: a.operator.badgeId,
+        badgeId: a.operator.badgeId ?? '',
         shiftsWorked: 0,
         totalClockMinutes: 0,
       });

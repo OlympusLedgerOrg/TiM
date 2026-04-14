@@ -6,6 +6,10 @@ import CompleteStepForm from './components/CompleteStepForm';
 import StationDashboard from './components/StationDashboard';
 import AndonBoard from './components/AndonBoard';
 import SupervisorDashboard from './components/SupervisorDashboard';
+import ManagementDashboard from './components/ManagementDashboard';
+import AdminPanel from './components/AdminPanel';
+import LoginPage from './components/LoginPage';
+import ShiftReportViewer from './components/ShiftReportViewer';
 import InstallPromptBanner from './components/InstallPromptBanner';
 import './styles/fiori.css';
 
@@ -21,9 +25,10 @@ setTheme('sap_horizon');
  * Role-based route guard
  * Reads the JWT role from localStorage to determine access.
  * Floor workers (Tech) → /station
- * Supervisors → /supervisor
- * Admins → all routes
+ * Supervisors → /supervisor, /management
+ * Admins → all routes including /admin
  * Andon → public, no auth required
+ * Login → public, for supervisors/managers
  */
 function getRole(): string | null {
   try {
@@ -38,7 +43,7 @@ function getRole(): string | null {
 
 function RequireRole({ allowed, children }: { allowed: string[]; children: React.ReactNode }) {
   const role = getRole();
-  if (!role) return <Navigate to="/station" replace />;
+  if (!role) return <Navigate to="/login" replace />;
   if (!allowed.includes(role)) return <Navigate to="/station" replace />;
   return <>{children}</>;
 }
@@ -47,6 +52,9 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Public: Login page for supervisors/managers */}
+        <Route path="/login" element={<LoginPage />} />
+
         {/* Public: Andon board — no auth, read-only for wall-mounted TVs */}
         <Route path="/andon" element={<AndonBoard />} />
 
@@ -60,6 +68,36 @@ function App() {
           element={
             <RequireRole allowed={['Supervisor', 'Admin']}>
               <SupervisorDashboard />
+            </RequireRole>
+          }
+        />
+
+        {/* Management: Plant-wide analytics dashboard */}
+        <Route
+          path="/management"
+          element={
+            <RequireRole allowed={['Supervisor', 'Admin']}>
+              <ManagementDashboard />
+            </RequireRole>
+          }
+        />
+
+        {/* Shift Reports: Auto-generated shift summaries */}
+        <Route
+          path="/shift-report"
+          element={
+            <RequireRole allowed={['Supervisor', 'Admin']}>
+              <ShiftReportViewer />
+            </RequireRole>
+          }
+        />
+
+        {/* Admin: Operator management panel */}
+        <Route
+          path="/admin"
+          element={
+            <RequireRole allowed={['Admin']}>
+              <AdminPanel />
             </RequireRole>
           }
         />
@@ -81,4 +119,3 @@ function App() {
 }
 
 createRoot(document.getElementById('root')!).render(<App />);
-

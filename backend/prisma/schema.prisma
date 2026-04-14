@@ -505,11 +505,13 @@ model InventoryMovement {
 //////////////////////////////////////////////////////
 
 model Operator {
-  id        String @id @default(uuid())
+  id        String  @id @default(uuid())
   name      String
   badgeId   String? @unique
+  isActive  Boolean @default(true)
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   steps     WorkOrderStep[]
   movements InventoryMovement[]

@@ -60,83 +60,81 @@ export async function getAndonBoard(tenantId: string, areaCode?: string) {
         orderBy: { code: 'asc' },
       });
 
+  // Collect all equipment IDs to batch-fetch downtime events (avoid N+1)
+  const allEquipmentIds: string[] = [];
+  for (const area of areas) {
+    for (const eq of area.equipment) {
+      allEquipmentIds.push(eq.id);
+    }
+  }
+  for (const eq of unassigned) {
+    allEquipmentIds.push(eq.id);
+  }
+
+  // Batch query: get all active downtime events for these equipment
+  const activeDowntimeEvents = allEquipmentIds.length > 0
+    ? await prisma.downtimeEvent.findMany({
+        where: {
+          equipmentId: { in: allEquipmentIds },
+          endedAt: null,
+        },
+        orderBy: { startedAt: 'desc' },
+      })
+    : [];
+
+  // Index by equipmentId (take the most recent one per equipment)
+  const downtimeByEquipment = new Map<string, typeof activeDowntimeEvents[0]>();
+  for (const dt of activeDowntimeEvents) {
+    if (!downtimeByEquipment.has(dt.equipmentId)) {
+      downtimeByEquipment.set(dt.equipmentId, dt);
+    }
+  }
+
+  function buildAndonEquipment(
+    eq: { id: string; code: string; name: string; type: string; status: string; statusSince: Date },
+    areaCode: string | null,
+    areaName: string | null,
+  ): AndonEquipment {
+    const activeDowntime = downtimeByEquipment.get(eq.id) || null;
+    return {
+      id: eq.id,
+      code: eq.code,
+      name: eq.name,
+      type: eq.type,
+      status: eq.status,
+      statusSince: eq.statusSince.toISOString(),
+      plantAreaCode: areaCode,
+      plantAreaName: areaName,
+      workCenterCode: null,
+      currentDowntime: activeDowntime
+        ? {
+            id: activeDowntime.id,
+            category: activeDowntime.category,
+            reasonCode: activeDowntime.reasonCode,
+            reasonText: activeDowntime.reasonText,
+            startedAt: activeDowntime.startedAt.toISOString(),
+            durationMin: (Date.now() - activeDowntime.startedAt.getTime()) / 60000,
+          }
+        : null,
+    };
+  }
+
   const result: AndonPlantArea[] = [];
 
   for (const area of areas) {
-    const areaEquipment: AndonEquipment[] = [];
-
-    for (const eq of area.equipment) {
-      const activeDowntime = await prisma.downtimeEvent.findFirst({
-        where: { equipmentId: eq.id, endedAt: null },
-        orderBy: { startedAt: 'desc' },
-      });
-
-      areaEquipment.push({
-        id: eq.id,
-        code: eq.code,
-        name: eq.name,
-        type: eq.type,
-        status: eq.status,
-        statusSince: eq.statusSince.toISOString(),
-        plantAreaCode: area.code,
-        plantAreaName: area.name,
-        workCenterCode: null,
-        currentDowntime: activeDowntime
-          ? {
-              id: activeDowntime.id,
-              category: activeDowntime.category,
-              reasonCode: activeDowntime.reasonCode,
-              reasonText: activeDowntime.reasonText,
-              startedAt: activeDowntime.startedAt.toISOString(),
-              durationMin: (Date.now() - activeDowntime.startedAt.getTime()) / 60000,
-            }
-          : null,
-      });
-    }
-
     result.push({
       code: area.code,
       name: area.name,
-      equipment: areaEquipment,
+      equipment: area.equipment.map(eq => buildAndonEquipment(eq, area.code, area.name)),
     });
   }
 
   // Add unassigned equipment
   if (unassigned.length > 0) {
-    const unassignedEquipment: AndonEquipment[] = [];
-    for (const eq of unassigned) {
-      const activeDowntime = await prisma.downtimeEvent.findFirst({
-        where: { equipmentId: eq.id, endedAt: null },
-        orderBy: { startedAt: 'desc' },
-      });
-
-      unassignedEquipment.push({
-        id: eq.id,
-        code: eq.code,
-        name: eq.name,
-        type: eq.type,
-        status: eq.status,
-        statusSince: eq.statusSince.toISOString(),
-        plantAreaCode: null,
-        plantAreaName: null,
-        workCenterCode: null,
-        currentDowntime: activeDowntime
-          ? {
-              id: activeDowntime.id,
-              category: activeDowntime.category,
-              reasonCode: activeDowntime.reasonCode,
-              reasonText: activeDowntime.reasonText,
-              startedAt: activeDowntime.startedAt.toISOString(),
-              durationMin: (Date.now() - activeDowntime.startedAt.getTime()) / 60000,
-            }
-          : null,
-      });
-    }
-
     result.push({
       code: 'UNASSIGNED',
       name: 'Unassigned',
-      equipment: unassignedEquipment,
+      equipment: unassigned.map(eq => buildAndonEquipment(eq, null, null)),
     });
   }
 

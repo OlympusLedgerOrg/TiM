@@ -16,20 +16,22 @@ import OeeScorecard from "./OeeScorecard";
  * Requires authentication (Supervisor or Admin role).
  */
 
+// Shift schedule: Rutherfordton 3-shift rotation
+const SHIFT_SCHEDULE = {
+  FIRST:  { start: 7,  end: 15, label: "1st Shift (7am – 3pm)" },
+  SECOND: { start: 15, end: 23, label: "2nd Shift (3pm – 11pm)" },
+  THIRD:  { start: 23, end: 7,  label: "3rd Shift (11pm – 7am)" },
+} as const;
+
 function getCurrentShift(): "FIRST" | "SECOND" | "THIRD" {
   const h = new Date().getHours();
-  if (h >= 7 && h < 15) return "FIRST";
-  if (h >= 15 && h < 23) return "SECOND";
+  if (h >= SHIFT_SCHEDULE.FIRST.start && h < SHIFT_SCHEDULE.FIRST.end) return "FIRST";
+  if (h >= SHIFT_SCHEDULE.SECOND.start && h < SHIFT_SCHEDULE.SECOND.end) return "SECOND";
   return "THIRD";
 }
 
 function getShiftLabel(shift: string): string {
-  const labels: Record<string, string> = {
-    FIRST: "1st Shift (7am – 3pm)",
-    SECOND: "2nd Shift (3pm – 11pm)",
-    THIRD: "3rd Shift (11pm – 7am)",
-  };
-  return labels[shift] || shift;
+  return SHIFT_SCHEDULE[shift as keyof typeof SHIFT_SCHEDULE]?.label || shift;
 }
 
 interface DowntimeSummary {

@@ -194,7 +194,7 @@ export function alertLotConsumed(lotNumber: string, remaining?: number, uom?: st
   const remainStr = remaining != null && uom
     ? `, ${Math.round(remaining)} ${uom} remaining`
     : "";
-  speak(`Lot consumed${remainStr}`);
+  speak(`Lot ${lotNumber} consumed${remainStr}`);
 }
 
 /** Production recorded — voice feedback */

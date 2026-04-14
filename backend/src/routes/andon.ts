@@ -16,9 +16,7 @@ const router = Router();
 
 const tenantSchema = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/);
 
-// GET /api/v1/andon?tenant=<tenantId>
-// GET /api/v1/andon/:areaCode?tenant=<tenantId>
-router.get('/:areaCode?', async (req, res) => {
+async function handleAndon(req: import('express').Request, res: import('express').Response) {
   const rawTenant = (req.query.tenant as string) || 'default';
   const tenantParse = tenantSchema.safeParse(rawTenant);
   if (!tenantParse.success) {
@@ -28,6 +26,12 @@ router.get('/:areaCode?', async (req, res) => {
   const areaCode = req.params.areaCode || undefined;
   const result = await getAndonBoard(tenantId, areaCode);
   return res.status(result.status).json(result.body);
-});
+}
+
+// GET /api/v1/andon?tenant=<tenantId>
+router.get('/', handleAndon);
+
+// GET /api/v1/andon/:areaCode?tenant=<tenantId>
+router.get('/:areaCode', handleAndon);
 
 export default router;

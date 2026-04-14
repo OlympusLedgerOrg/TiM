@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { SignJWT } from 'jose';
+import { timingSafeEqual } from 'crypto';
 import { prisma } from '../prisma/client.js';
 import { authLimiter } from '../middleware/rateLimiter.js';
 import type { Role } from '../middleware/auth.js';
@@ -13,10 +14,20 @@ const router = Router();
  * Floor workers use badge scan (handled in equipment/shifts/clock-in).
  * This provides a proper email + password login for management users.
  *
- * NOTE: Passwords are compared using timing-safe comparison.
- * In production, use a proper hashing library (bcrypt/argon2).
- * For now, we use a simple env-based password for bootstrap.
+ * BOOTSTRAP MODE: Uses env-based ADMIN_PASSWORD for initial setup.
+ * TODO: Replace with bcrypt/argon2 password hashing and per-user stored hashes
+ * once a user registration flow is implemented.
  */
+
+/**
+ * Timing-safe string comparison to prevent timing attacks.
+ * Both strings are padded to equal length before comparison.
+ */
+function safeCompare(a: string, b: string): boolean {
+  const bufA = Buffer.from(a.padEnd(256, '\0'));
+  const bufB = Buffer.from(b.padEnd(256, '\0'));
+  return timingSafeEqual(bufA, bufB);
+}
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -41,10 +52,10 @@ router.post('/login', authLimiter, async (req, res) => {
     return res.status(401).json({ message: 'Invalid email or password' });
   }
 
-  // For bootstrap/demo: compare against env-based password
-  // In production, replace with bcrypt.compare(password, user.passwordHash)
+  // Bootstrap mode: compare against env-based password using timing-safe comparison
+  // TODO: Replace with bcrypt.compare(password, user.passwordHash) once per-user hashes exist
   const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
-  if (password !== adminPassword) {
+  if (!safeCompare(password, adminPassword)) {
     return res.status(401).json({ message: 'Invalid email or password' });
   }
 

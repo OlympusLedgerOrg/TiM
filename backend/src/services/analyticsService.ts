@@ -157,7 +157,14 @@ export async function getPlantKPIs(tenantId: string, periodStart: Date, periodEn
     downEquipment,
   };
 
-  return { status: 200, body: { kpis, periodStart: periodStart.toISOString(), periodEnd: periodEnd.toISOString() } };
+  return { status: 200, body: {
+    kpis,
+    periodStart: periodStart.toISOString(),
+    periodEnd: periodEnd.toISOString(),
+    notes: {
+      performance: 'Performance is placeholder (1.0) until production cycle time data is wired.',
+    },
+  } };
 }
 
 // ─── Shift-over-Shift Comparison ──────────────────────────────────────────────

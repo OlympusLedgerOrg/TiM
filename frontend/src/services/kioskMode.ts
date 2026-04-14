@@ -60,9 +60,9 @@ export function setupWakeLockReacquire(): () => void {
  *  3rd = 11 PM–7 AM → ends at 07:00
  */
 const SHIFT_END_HOURS: Record<string, number> = {
-  FIRST: 15,   // 3 PM
-  SECOND: 23,  // 11 PM
-  THIRD: 7,    // 7 AM
+  FIRST: 15,   // 3pm
+  SECOND: 23,  // 11pm
+  THIRD: 7,    // 7am (next day if started at 11pm)
 };
 
 /**
@@ -76,11 +76,11 @@ export function msUntilShiftEnd(shift: string): number {
   const end = new Date(now);
   end.setHours(endHour, 0, 0, 0);
 
-  // If end time is in the past, it means the shift ends tomorrow
-  // (e.g., 3rd shift at 2 AM — end is 7 AM today, which is in the future)
-  // But if it's 8 AM and shift is THIRD, end was 7 AM today (past) → already over
+  // For THIRD shift (11pm–7am), end hour is 7am:
+  //   - If current hour >= 23 (shift just started), 7am today is in the past → add 1 day
+  //   - If current hour < 7 (e.g. 2am), 7am today is in the future → correct as-is
+  //   - If current hour >= 7 and < 23, shift already ended → return 0
   if (end.getTime() <= now.getTime()) {
-    // For THIRD shift: if current hour >= 23 (shift just started), end is tomorrow 7 AM
     if (shift === 'THIRD' && now.getHours() >= 23) {
       end.setDate(end.getDate() + 1);
     } else {

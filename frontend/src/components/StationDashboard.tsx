@@ -496,10 +496,10 @@ export default function StationDashboard() {
     initAudio();
   }
 
-  function handleLogout() {
+  const handleLogout = useCallback(() => {
     setOperator(null);
     localStorage.removeItem("tim_operator");
-  }
+  }, []);
 
   // Show badge login if not authenticated
   if (!operator) {

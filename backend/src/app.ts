@@ -3,6 +3,8 @@ import express from 'express';
 import { Server } from 'socket.io';
 import { createServer } from 'http';
 import { jwtVerify } from 'jose';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import workOrderRoutes from './routes/workOrders.js';
 import healthRoutes from './routes/health.js';
 import queueRoutes from './routes/queue.js';
@@ -22,6 +24,10 @@ import authRoutes from './routes/auth.js';
 import { globalLimiter, sapLimiter } from './middleware/rateLimiter.js';
 import { httpsRedirect } from './middleware/httpsRedirect.js';
 import type { Role } from './middleware/auth.js';
+
+// Get directory name for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const httpServer = createServer(app);
@@ -105,6 +111,25 @@ app.use('/api/v1/andon', andonRoutes);
 app.use('/api/v1/analytics', analyticsRoutes);
 app.use('/api/v1/operators', operatorRoutes);
 app.use('/api/v1/auth', authRoutes);
+
+// Desktop Mode: Serve static frontend files when STATIC_FILES_PATH is set
+// This allows the backend to serve the built frontend in the Electron app
+const staticFilesPath = process.env.STATIC_FILES_PATH;
+if (staticFilesPath) {
+  // Serve static files from the frontend build
+  app.use(express.static(staticFilesPath));
+
+  // SPA fallback: serve index.html for all non-API routes
+  app.get('*', (req, res, next) => {
+    // Skip API routes and health endpoint
+    if (req.path.startsWith('/api') || req.path.startsWith('/health') || req.path.startsWith('/socket.io')) {
+      return next();
+    }
+    res.sendFile(path.join(staticFilesPath, 'index.html'));
+  });
+
+  console.log(`📦 Desktop mode: serving frontend from ${staticFilesPath}`);
+}
 
 // Socket.IO connection handling with tenant validation
 io.on('connection', (socket) => {

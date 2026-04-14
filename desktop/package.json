@@ -1,0 +1,41 @@
+{
+  "name": "tim-desktop",
+  "version": "1.0.0",
+  "description": "TiM Desktop Application — Work Order Management System",
+  "private": true,
+  "main": ".vite/build/main.js",
+  "type": "module",
+  "scripts": {
+    "start": "electron-forge start",
+    "package": "electron-forge package",
+    "make": "electron-forge make",
+    "publish": "electron-forge publish",
+    "lint": "eslint . --ext .ts"
+  },
+  "config": {
+    "forge": "./forge.config.ts"
+  },
+  "dependencies": {
+    "electron-squirrel-startup": "^1.0.1",
+    "electron-store": "^10.0.0"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "^7.5.0",
+    "@electron-forge/maker-deb": "^7.5.0",
+    "@electron-forge/maker-dmg": "^7.5.0",
+    "@electron-forge/maker-rpm": "^7.5.0",
+    "@electron-forge/maker-squirrel": "^7.5.0",
+    "@electron-forge/maker-zip": "^7.5.0",
+    "@electron-forge/plugin-auto-unpack-natives": "^7.5.0",
+    "@electron-forge/plugin-vite": "^7.5.0",
+    "@types/node": "^22.7.4",
+    "electron": "^33.0.0",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.8"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "author": "TiM Development Team",
+  "license": "MIT"
+}

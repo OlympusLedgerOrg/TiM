@@ -1,0 +1,198 @@
+/**
+ * TiM Desktop — Splash Screen Styles
+ *
+ * Clean, modern splash screen for the desktop application.
+ * Uses CSS variables for easy theming.
+ */
+
+:root {
+  --primary-color: #0070f3;
+  --primary-dark: #0051a8;
+  --background: #ffffff;
+  --text-primary: #1a1a1a;
+  --text-secondary: #666666;
+  --border-color: #e0e0e0;
+  --error-color: #dc2626;
+  --error-bg: #fef2f2;
+  --progress-bg: #e5e7eb;
+  --shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background: var(--background);
+  color: var(--text-primary);
+  height: 100vh;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.splash-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 2rem;
+}
+
+/* Logo Section */
+.logo-section {
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+
+.logo {
+  margin-bottom: 1rem;
+}
+
+.logo-icon {
+  width: 80px;
+  height: 80px;
+  color: var(--primary-color);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.9;
+  }
+}
+
+.title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.5px;
+  margin-bottom: 0.5rem;
+}
+
+.subtitle {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+/* Progress Section */
+.progress-section {
+  width: 100%;
+  max-width: 350px;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 6px;
+  background: var(--progress-bg);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+.progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--primary-color), var(--primary-dark));
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.status-text {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  text-align: center;
+  min-height: 1.25rem;
+}
+
+/* Error Section */
+.error-section {
+  text-align: center;
+  padding: 1.5rem;
+  background: var(--error-bg);
+  border-radius: 12px;
+  max-width: 350px;
+  width: 100%;
+}
+
+.error-icon {
+  font-size: 2rem;
+  margin-bottom: 0.75rem;
+}
+
+.error-text {
+  font-size: 0.875rem;
+  color: var(--error-color);
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
+
+.error-button {
+  background: var(--error-color);
+  color: white;
+  border: none;
+  padding: 0.5rem 1.25rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.error-button:hover {
+  background: #b91c1c;
+}
+
+.error-button:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.3);
+}
+
+/* Footer */
+.footer {
+  position: absolute;
+  bottom: 1rem;
+  text-align: center;
+}
+
+.version {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #1a1a1a;
+    --text-primary: #ffffff;
+    --text-secondary: #a0a0a0;
+    --border-color: #333333;
+    --progress-bg: #333333;
+    --error-bg: #2d1f1f;
+  }
+}
+
+/* Loading animation for indeterminate progress */
+.progress-bar.indeterminate .progress-fill {
+  width: 30%;
+  animation: indeterminate 1.5s ease-in-out infinite;
+}
+
+@keyframes indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}

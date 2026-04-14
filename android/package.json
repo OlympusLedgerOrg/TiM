@@ -1,0 +1,37 @@
+{
+  "name": "tim-android",
+  "version": "1.0.0",
+  "description": "TiM Android Application — Production Manager for Trelleborg",
+  "private": true,
+  "scripts": {
+    "init": "npx cap init TiM com.trelleborg.tim --web-dir ../frontend/dist",
+    "add-android": "npx cap add android",
+    "sync": "npx cap sync android",
+    "open": "npx cap open android",
+    "build": "npm run build:frontend && npm run sync",
+    "build:frontend": "cd ../frontend && npm run build",
+    "run:android": "npx cap run android",
+    "run:emulator": "npx cap run android --target=emulator",
+    "copy": "npx cap copy android",
+    "update": "npx cap update android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/app": "^6.0.0",
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/haptics": "^6.0.0",
+    "@capacitor/keyboard": "^6.0.0",
+    "@capacitor/splash-screen": "^6.0.0",
+    "@capacitor/status-bar": "^6.0.0",
+    "@capacitor/camera": "^6.0.0",
+    "@capacitor/barcode-scanner": "^6.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.0.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "author": "TiM Development Team",
+  "license": "MIT"
+}

@@ -3,6 +3,7 @@ import express from 'express';
 import { Server } from 'socket.io';
 import { createServer } from 'http';
 import { jwtVerify } from 'jose';
+import path from 'path';
 import workOrderRoutes from './routes/workOrders.js';
 import healthRoutes from './routes/health.js';
 import queueRoutes from './routes/queue.js';
@@ -19,6 +20,8 @@ import andonRoutes from './routes/andon.js';
 import analyticsRoutes from './routes/analytics.js';
 import operatorRoutes from './routes/operators.js';
 import authRoutes from './routes/auth.js';
+import bomRoutes from './routes/bom.js';
+import materialRoutes from './routes/materials.js';
 import { globalLimiter, sapLimiter } from './middleware/rateLimiter.js';
 import { httpsRedirect } from './middleware/httpsRedirect.js';
 import type { Role } from './middleware/auth.js';
@@ -105,6 +108,33 @@ app.use('/api/v1/andon', andonRoutes);
 app.use('/api/v1/analytics', analyticsRoutes);
 app.use('/api/v1/operators', operatorRoutes);
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/bom', bomRoutes);
+app.use('/api/v1/materials', materialRoutes);
+
+// Desktop Mode: Serve static frontend files when STATIC_FILES_PATH is set
+// This allows the backend to serve the built frontend in the Electron app
+const staticFilesPath = process.env.STATIC_FILES_PATH;
+if (staticFilesPath) {
+  // Serve static files from the frontend build
+  app.use(express.static(staticFilesPath));
+
+  // SPA fallback: serve index.html for all non-API routes
+  app.get('*', (req, res, next) => {
+    // Skip API routes and health endpoint
+    if (req.path.startsWith('/api') || req.path.startsWith('/health') || req.path.startsWith('/socket.io')) {
+      return next();
+    }
+    const indexPath = path.join(staticFilesPath, 'index.html');
+    res.sendFile(indexPath, (err) => {
+      if (err) {
+        console.error(`Failed to serve index.html: ${err.message}`);
+        res.status(500).send('Application files not found. Please reinstall the application.');
+      }
+    });
+  });
+
+  console.log(`📦 Desktop mode: serving frontend from ${staticFilesPath}`);
+}
 
 // Socket.IO connection handling with tenant validation
 io.on('connection', (socket) => {

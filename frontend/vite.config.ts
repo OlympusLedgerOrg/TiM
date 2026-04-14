@@ -19,6 +19,22 @@ export default defineConfig({
       manifest: false, // Using existing manifest.json in public/
     }),
   ],
+  // Production build configuration
+  build: {
+    outDir: 'dist',
+    assetsDir: 'assets',
+    sourcemap: false,
+    minify: 'terser',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          ui5: ['@ui5/webcomponents', '@ui5/webcomponents-fiori', '@ui5/webcomponents-react'],
+          charts: ['recharts'],
+        },
+      },
+    },
+  },
   server: {
     port: 5173,
     strictPort: true,

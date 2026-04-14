@@ -1,13 +1,16 @@
 /**
- * Alert Sounds + Vibration — Haptic and audio feedback for critical events
+ * Alert Sounds + Vibration + Voice Feedback
+ * Haptic, audio, and speech feedback for critical events
  *
  * Factory floor is LOUD. Workers need:
  *  - Vibration (tablet in pocket or mounted) for critical alerts
  *  - Audio tones for equipment DOWN / quality fail events
+ *  - Voice confirmations for glove-wearing workers
  *  - Visual toast notifications (handled by the dashboard component)
  *
  * Uses Web Audio API for tones — no audio files needed.
  * Uses Vibration API for haptic feedback (mobile/tablet only).
+ * Uses Speech Synthesis API for voice confirmations.
  */
 
 let audioCtx: AudioContext | null = null;
@@ -63,39 +66,142 @@ function vibrate(pattern: number | number[]) {
   }
 }
 
-// ─── Public Alert Functions ───────────────────────────────────────────────────
+// ─── Voice Synthesis ──────────────────────────────────────────────────────────
 
-/** Machine went DOWN — urgent double beep + strong vibration */
-export function alertMachineDown() {
-  playTone(440, 0.2, "square");
-  setTimeout(() => playTone(440, 0.3, "square"), 250);
-  vibrate([200, 100, 300]);
+let _voiceEnabled = true;
+
+/**
+ * Enable or disable voice feedback globally.
+ */
+export function setVoiceEnabled(enabled: boolean) {
+  _voiceEnabled = enabled;
 }
 
-/** Machine back up — friendly single beep + light vibration */
-export function alertMachineUp() {
-  playTone(880, 0.15, "sine");
-  vibrate(100);
+export function isVoiceEnabled(): boolean {
+  return _voiceEnabled;
 }
 
-/** Quality alert (lab fail, etc.) — triple beep + strong vibration */
-export function alertQuality() {
-  playTone(660, 0.15, "triangle");
-  setTimeout(() => playTone(660, 0.15, "triangle"), 200);
-  setTimeout(() => playTone(880, 0.2, "triangle"), 400);
+/**
+ * Speak a message using the Web Speech Synthesis API.
+ * Works even with gloves and ear protection — loud and clear.
+ */
+export function speak(message: string, options?: { rate?: number; pitch?: number; volume?: number }) {
+  if (!_voiceEnabled) return;
+
+  try {
+    if (!('speechSynthesis' in window)) return;
+
+    // Cancel any pending speech
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(message);
+    utterance.rate = options?.rate ?? 1.1;   // Slightly fast for urgency
+    utterance.pitch = options?.pitch ?? 1.0;
+    utterance.volume = options?.volume ?? 1.0;
+
+    // Prefer a clear, natural voice
+    const voices = window.speechSynthesis.getVoices();
+    const preferred = voices.find(v =>
+      v.lang.startsWith('en') && (v.name.includes('Google') || v.name.includes('Samantha') || v.name.includes('Daniel'))
+    ) || voices.find(v => v.lang.startsWith('en'));
+    if (preferred) utterance.voice = preferred;
+
+    window.speechSynthesis.speak(utterance);
+  } catch {
+    // Non-critical — speech may not be supported
+  }
+}
+
+// ─── Haptic Patterns ──────────────────────────────────────────────────────────
+// Different vibration patterns for distinct feedback types
+
+/** Strong double-buzz for errors and urgent alerts */
+export function hapticError() {
   vibrate([100, 50, 100, 50, 200]);
 }
 
-/** Success confirmation — quick chirp + tap */
-export function alertSuccess() {
-  playTone(880, 0.1, "sine");
+/** Quick single tap for success */
+export function hapticSuccess() {
   vibrate(50);
 }
 
+/** Medium buzz for warnings */
+export function hapticWarning() {
+  vibrate([150, 75, 150]);
+}
+
+/** Long single buzz for attention-needed */
+export function hapticAlert() {
+  vibrate([300, 100, 300]);
+}
+
+/** Light tap for UI interactions */
+export function hapticTap() {
+  vibrate(30);
+}
+
+// ─── Public Alert Functions ───────────────────────────────────────────────────
+
+/** Machine went DOWN — urgent double beep + strong vibration + voice */
+export function alertMachineDown(equipmentCode?: string) {
+  playTone(440, 0.2, "square");
+  setTimeout(() => playTone(440, 0.3, "square"), 250);
+  hapticAlert();
+  if (equipmentCode) {
+    speak(`Machine ${equipmentCode} is down`);
+  }
+}
+
+/** Machine back up — friendly single beep + light vibration + voice */
+export function alertMachineUp(equipmentCode?: string, downtimeMin?: number) {
+  playTone(880, 0.15, "sine");
+  hapticSuccess();
+  if (equipmentCode) {
+    const msg = downtimeMin
+      ? `${equipmentCode} back up after ${Math.round(downtimeMin)} minutes`
+      : `${equipmentCode} is running`;
+    speak(msg);
+  }
+}
+
+/** Quality alert (lab fail, etc.) — triple beep + strong vibration + voice */
+export function alertQuality(detail?: string) {
+  playTone(660, 0.15, "triangle");
+  setTimeout(() => playTone(660, 0.15, "triangle"), 200);
+  setTimeout(() => playTone(880, 0.2, "triangle"), 400);
+  hapticError();
+  speak(detail || "Quality alert");
+}
+
+/** Success confirmation — quick chirp + tap + voice */
+export function alertSuccess(message?: string) {
+  playTone(880, 0.1, "sine");
+  hapticSuccess();
+  if (message) speak(message);
+}
+
 /** Generic notification — soft beep + tap */
-export function alertNotification() {
+export function alertNotification(message?: string) {
   playTone(660, 0.12, "sine");
-  vibrate(80);
+  hapticTap();
+  if (message) speak(message);
+}
+
+/** Lot consumed — voice feedback with quantity remaining */
+export function alertLotConsumed(lotNumber: string, remaining?: number, uom?: string) {
+  playTone(880, 0.1, "sine");
+  hapticSuccess();
+  const remainStr = remaining != null && uom
+    ? `, ${Math.round(remaining)} ${uom} remaining`
+    : "";
+  speak(`Lot consumed${remainStr}`);
+}
+
+/** Production recorded — voice feedback */
+export function alertProductionRecorded(quantity: number, uom: string) {
+  playTone(880, 0.15, "sine");
+  hapticSuccess();
+  speak(`Production recorded, ${Math.round(quantity)} ${uom}`);
 }
 
 /**
@@ -105,4 +211,8 @@ export function alertNotification() {
  */
 export function initAudio() {
   getAudioContext();
+  // Pre-load voices for speech synthesis
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.getVoices();
+  }
 }

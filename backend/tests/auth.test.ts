@@ -1,5 +1,5 @@
 /**
- * Auth API Tests — Login for supervisors/managers
+ * Auth API Tests — Login for supervisors/managers (bcrypt password hashing)
  */
 
 // Mock Prisma before any imports
@@ -14,11 +14,21 @@ jest.mock('../src/prisma/client', () => {
 });
 
 import request from 'supertest';
+import bcrypt from 'bcryptjs';
 import { app } from '../src/app';
 import { prisma } from '../src/prisma/client';
 
 describe('POST /api/v1/auth/login', () => {
-  const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+  const testPassword = 'SecurePass123!';
+  let passwordHash: string;
+
+  beforeAll(async () => {
+    passwordHash = await bcrypt.hash(testPassword, 10);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
 
   it('returns 400 for missing credentials', async () => {
     const res = await request(app)
@@ -27,12 +37,33 @@ describe('POST /api/v1/auth/login', () => {
     expect(res.status).toBe(400);
   });
 
+  it('returns 400 for missing password', async () => {
+    const res = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: 'super@test.com' });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 for missing email', async () => {
+    const res = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ password: testPassword });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 for invalid email format', async () => {
+    const res = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: 'not-an-email', password: testPassword });
+    expect(res.status).toBe(400);
+  });
+
   it('returns 401 for unknown email', async () => {
     (prisma.user.findUnique as jest.Mock).mockResolvedValueOnce(null);
 
     const res = await request(app)
       .post('/api/v1/auth/login')
-      .send({ email: 'unknown@example.com', password: adminPassword });
+      .send({ email: 'unknown@example.com', password: testPassword });
 
     expect(res.status).toBe(401);
     expect(res.body.message).toContain('Invalid');
@@ -41,7 +72,7 @@ describe('POST /api/v1/auth/login', () => {
   it('returns 401 for wrong password', async () => {
     (prisma.user.findUnique as jest.Mock).mockResolvedValueOnce({
       id: 'user-1', email: 'super@test.com', name: 'Super', role: 'Supervisor',
-      tenantId: 'tenant-1', isActive: true,
+      tenantId: 'tenant-1', isActive: true, passwordHash,
     });
 
     const res = await request(app)
@@ -49,30 +80,46 @@ describe('POST /api/v1/auth/login', () => {
       .send({ email: 'super@test.com', password: 'wrongpassword' });
 
     expect(res.status).toBe(401);
+    expect(res.body.message).toContain('Invalid');
   });
 
   it('returns 401 for inactive user', async () => {
     (prisma.user.findUnique as jest.Mock).mockResolvedValueOnce({
       id: 'user-1', email: 'inactive@test.com', name: 'Inactive', role: 'Supervisor',
-      tenantId: 'tenant-1', isActive: false,
+      tenantId: 'tenant-1', isActive: false, passwordHash,
     });
 
     const res = await request(app)
       .post('/api/v1/auth/login')
-      .send({ email: 'inactive@test.com', password: adminPassword });
+      .send({ email: 'inactive@test.com', password: testPassword });
 
     expect(res.status).toBe(401);
+    expect(res.body.message).toContain('Invalid');
+  });
+
+  it('returns 401 for user without passwordHash (badge-only worker)', async () => {
+    (prisma.user.findUnique as jest.Mock).mockResolvedValueOnce({
+      id: 'user-2', email: 'worker@test.com', name: 'Worker', role: 'Tech',
+      tenantId: 'tenant-1', isActive: true, passwordHash: null,
+    });
+
+    const res = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: 'worker@test.com', password: 'anything' });
+
+    expect(res.status).toBe(401);
+    expect(res.body.message).toContain('Invalid');
   });
 
   it('returns token for valid login', async () => {
     (prisma.user.findUnique as jest.Mock).mockResolvedValueOnce({
       id: 'user-1', email: 'super@test.com', name: 'Supervisor',
-      role: 'Supervisor', tenantId: 'tenant-1', isActive: true,
+      role: 'Supervisor', tenantId: 'tenant-1', isActive: true, passwordHash,
     });
 
     const res = await request(app)
       .post('/api/v1/auth/login')
-      .send({ email: 'super@test.com', password: adminPassword });
+      .send({ email: 'super@test.com', password: testPassword });
 
     expect(res.status).toBe(200);
     expect(res.body.token).toBeDefined();
@@ -82,15 +129,15 @@ describe('POST /api/v1/auth/login', () => {
     expect(res.body.user.role).toBe('Supervisor');
   });
 
-  it('token contains correct claims', async () => {
+  it('token contains correct claims (sub, role, tenantId, name)', async () => {
     (prisma.user.findUnique as jest.Mock).mockResolvedValueOnce({
       id: 'user-1', email: 'admin@test.com', name: 'Admin User',
-      role: 'Admin', tenantId: 'tenant-1', isActive: true,
+      role: 'Admin', tenantId: 'tenant-1', isActive: true, passwordHash,
     });
 
     const res = await request(app)
       .post('/api/v1/auth/login')
-      .send({ email: 'admin@test.com', password: adminPassword });
+      .send({ email: 'admin@test.com', password: testPassword });
 
     expect(res.status).toBe(200);
     const token = res.body.token;
@@ -98,6 +145,7 @@ describe('POST /api/v1/auth/login', () => {
     expect(payload.sub).toBe('user-1');
     expect(payload.role).toBe('Admin');
     expect(payload.tenantId).toBe('tenant-1');
+    expect(payload.name).toBe('Admin User');
     expect(payload.exp).toBeDefined();
   });
 });

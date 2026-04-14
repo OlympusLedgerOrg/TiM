@@ -11,6 +11,7 @@ import AdminPanel from './components/AdminPanel';
 import LoginPage from './components/LoginPage';
 import ShiftReportViewer from './components/ShiftReportViewer';
 import InstallPromptBanner from './components/InstallPromptBanner';
+import OfflineBanner from './components/OfflineBanner';
 import './styles/fiori.css';
 
 // Set SAP Fiori theme
@@ -111,6 +112,9 @@ function App() {
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+
+      {/* Global offline indicator — shown on all routes */}
+      <OfflineBanner />
 
       {/* PWA install prompt — shown on all routes */}
       <InstallPromptBanner />

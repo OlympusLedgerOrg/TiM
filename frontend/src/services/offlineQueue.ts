@@ -108,6 +108,10 @@ export function enqueueAction(type: 'consume' | 'produce', payload: Record<strin
   const queue = getQueue();
   queue.push(action);
   saveQueue(queue);
+
+  // Register background sync so the SW will trigger flush when connectivity returns
+  registerBackgroundSync();
+
   return action;
 }
 
@@ -150,4 +154,46 @@ export async function flushQueue(syncFn: SyncCallback): Promise<number> {
 
   saveQueue(remaining);
   return synced;
+}
+
+// ─── Background Sync Registration ─────────────────────────────────────────────
+
+/**
+ * Register a Background Sync tag with the service worker.
+ * When connectivity returns, the SW will fire a sync event and
+ * post a message to the client to flush the offline queue.
+ */
+async function registerBackgroundSync(): Promise<void> {
+  try {
+    if ('serviceWorker' in navigator && 'SyncManager' in window) {
+      const reg = await navigator.serviceWorker.ready;
+      await (reg as ServiceWorkerRegistration & { sync: { register(tag: string): Promise<void> } })
+        .sync.register('offline-queue-sync');
+    }
+  } catch {
+    // Background Sync not supported or registration failed — non-critical
+  }
+}
+
+/**
+ * Listen for messages from the service worker.
+ * Call this once at app startup, passing the syncFn that knows how to
+ * replay each queued action against the real API.
+ */
+export function listenForSWSync(syncFn: SyncCallback, onSynced?: (count: number) => void): () => void {
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
+    return () => {};
+  }
+
+  const handler = async (event: MessageEvent) => {
+    if (event.data?.type === 'FLUSH_OFFLINE_QUEUE') {
+      const count = await flushQueue(syncFn);
+      if (count > 0) {
+        onSynced?.(count);
+      }
+    }
+  };
+
+  navigator.serviceWorker.addEventListener('message', handler);
+  return () => navigator.serviceWorker.removeEventListener('message', handler);
 }

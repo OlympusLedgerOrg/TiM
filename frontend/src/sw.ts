@@ -7,6 +7,12 @@ import { BackgroundSyncPlugin } from 'workbox-background-sync';
 
 declare let self: ServiceWorkerGlobalScope;
 
+// SyncEvent type for Background Sync API
+interface SyncEvent extends ExtendableEvent {
+  readonly tag: string;
+  readonly lastChance: boolean;
+}
+
 // ─── Precache Vite-built assets ───────────────────────────────────────────────
 cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
@@ -110,6 +116,27 @@ registerRoute(
     ],
   }),
 );
+
+// ─── Background Sync — wire offlineQueue to SW sync event ─────────────────────
+
+self.addEventListener('sync', ((event: SyncEvent) => {
+  if (event.tag === 'offline-queue-sync') {
+    event.waitUntil(
+      self.clients.matchAll({ type: 'window' }).then((clients) => {
+        clients.forEach((client) => {
+          client.postMessage({ type: 'FLUSH_OFFLINE_QUEUE' });
+        });
+      }),
+    );
+  }
+}) as EventListener);
+
+// Listen for messages from the main thread
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
 
 // ─── SW Lifecycle ─────────────────────────────────────────────────────────────
 

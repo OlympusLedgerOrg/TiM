@@ -23,6 +23,7 @@ import {
   enqueueAction,
   flushQueue,
   getQueueSize,
+  listenForSWSync,
 } from "../services/offlineQueue";
 import {
   alertMachineDown,
@@ -31,6 +32,12 @@ import {
   alertNotification,
   initAudio,
 } from "../services/alertSounds";
+import {
+  requestWakeLock,
+  releaseWakeLock,
+  setupWakeLockReacquire,
+  startAutoLogoutTimer,
+} from "../services/kioskMode";
 import BadgeLogin from "./BadgeLogin";
 import ShiftBanner from "./ShiftBanner";
 import EquipmentTiles from "./EquipmentTiles";
@@ -543,6 +550,41 @@ function StationDashboardInner({ workCenterCode, operator, onLogout }: {
   // ─── Online/Offline detection ─────────────────────────────────────────
   useEffect(() => {
     return onConnectivityChange(setOnline);
+  }, []);
+
+  // ─── Kiosk: Wake Lock (prevent screen dimming on tablets) ─────────────
+  useEffect(() => {
+    requestWakeLock();
+    const cleanupReacquire = setupWakeLockReacquire();
+    return () => {
+      releaseWakeLock();
+      cleanupReacquire();
+    };
+  }, []);
+
+  // ─── Kiosk: Auto-logout at shift end ──────────────────────────────────
+  useEffect(() => {
+    return startAutoLogoutTimer(operator.shift, onLogout);
+  }, [operator.shift, onLogout]);
+
+  // ─── SW Background Sync: flush offline queue on connectivity restore ──
+  useEffect(() => {
+    return listenForSWSync(
+      async (action) => {
+        if (action.type === "consume") {
+          const p = action.payload as { workOrderId: string; lotId: string; quantity: number; operatorId?: string };
+          await consumeMaterial(p);
+        } else {
+          const p = action.payload as { workOrderId: string; quantity: number; uom: string; operatorId?: string };
+          await recordProduction(p);
+        }
+      },
+      (count) => {
+        showToast(`✓ Synced ${count} offline action${count > 1 ? "s" : ""}`, "success");
+        loadData();
+      },
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ─── Socket.IO real-time events ───────────────────────────────────────

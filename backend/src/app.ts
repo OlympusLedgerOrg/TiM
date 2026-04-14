@@ -20,6 +20,8 @@ import andonRoutes from './routes/andon.js';
 import analyticsRoutes from './routes/analytics.js';
 import operatorRoutes from './routes/operators.js';
 import authRoutes from './routes/auth.js';
+import bomRoutes from './routes/bom.js';
+import materialRoutes from './routes/materials.js';
 import { globalLimiter, sapLimiter } from './middleware/rateLimiter.js';
 import { httpsRedirect } from './middleware/httpsRedirect.js';
 import type { Role } from './middleware/auth.js';
@@ -106,6 +108,8 @@ app.use('/api/v1/andon', andonRoutes);
 app.use('/api/v1/analytics', analyticsRoutes);
 app.use('/api/v1/operators', operatorRoutes);
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/bom', bomRoutes);
+app.use('/api/v1/materials', materialRoutes);
 
 // Desktop Mode: Serve static frontend files when STATIC_FILES_PATH is set
 // This allows the backend to serve the built frontend in the Electron app

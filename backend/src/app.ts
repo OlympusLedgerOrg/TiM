@@ -15,6 +15,7 @@ import allocationRoutes from './routes/allocation.js';
 import equipmentRoutes from './routes/equipment.js';
 import teamsRoutes from './routes/teamsNotifications.js';
 import plantAreaRoutes from './routes/plantAreas.js';
+import andonRoutes from './routes/andon.js';
 import { globalLimiter, sapLimiter } from './middleware/rateLimiter.js';
 import { httpsRedirect } from './middleware/httpsRedirect.js';
 import type { Role } from './middleware/auth.js';
@@ -97,6 +98,7 @@ app.use('/api/v1/allocation', allocationRoutes);
 app.use('/api/v1/equipment', equipmentRoutes);
 app.use('/api/v1/teams', teamsRoutes);
 app.use('/api/v1/plant-areas', plantAreaRoutes);
+app.use('/api/v1/andon', andonRoutes);
 
 // Socket.IO connection handling with tenant validation
 io.on('connection', (socket) => {

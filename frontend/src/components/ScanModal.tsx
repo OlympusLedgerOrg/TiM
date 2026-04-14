@@ -31,7 +31,6 @@ export default function ScanModal({ title, onScan, onClose }: ScanModalProps) {
   const [value, setValue] = useState("");
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
-  const [lastScanned, setLastScanned] = useState<string | null>(null);
 
   // Track last scanned value to deduplicate rapid repeated scans
   const lastScannedRef = useRef<string | null>(null);
@@ -66,7 +65,6 @@ export default function ScanModal({ title, onScan, onClose }: ScanModalProps) {
           // Deduplicate rapid scans of the same code
           if (decodedText === lastScannedRef.current) return;
           lastScannedRef.current = decodedText;
-          setLastScanned(decodedText);
 
           // Haptic feedback
           if (navigator.vibrate) navigator.vibrate(150);

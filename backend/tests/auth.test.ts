@@ -2,6 +2,8 @@
  * Auth API Tests — Login for supervisors/managers (bcrypt password hashing)
  */
 
+process.env.RATE_LIMIT_AUTH = '100';
+
 // Mock Prisma before any imports
 jest.mock('../src/prisma/client', () => {
   const mockPrisma = {
@@ -130,6 +132,7 @@ describe('POST /api/v1/auth/login', () => {
   });
 
   it('returns a sanitized 500 response for unexpected errors', async () => {
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     (prisma.user.findUnique as jest.Mock).mockRejectedValueOnce(new Error('database exploded'));
 
     const res = await request(app)
@@ -138,6 +141,7 @@ describe('POST /api/v1/auth/login', () => {
 
     expect(res.status).toBe(500);
     expect(res.body).toEqual({ message: 'Internal server error' });
+    consoleErrorSpy.mockRestore();
   });
 
   it('token contains correct claims (sub, role, tenantId, name)', async () => {

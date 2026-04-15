@@ -91,12 +91,12 @@ describe('Equipment API', () => {
           axxosEquipmentId: 'AX-4002', isActive: true,
         },
       ]);
-      m.downtimeEvent.findFirst
-        .mockResolvedValueOnce(null) // eq-1: no downtime
-        .mockResolvedValueOnce({     // eq-2: active downtime
+      m.downtimeEvent.findMany.mockResolvedValue([
+        {     // eq-2: active downtime
           id: 'dt-1', category: 'UNPLANNED', reasonCode: 'BREAKDOWN-HYDRAULIC',
-          reasonText: 'Hydraulic line burst', startedAt: new Date('2026-04-13T14:30:00Z'),
-        });
+          reasonText: 'Hydraulic line burst', startedAt: new Date('2026-04-13T14:30:00Z'), equipmentId: 'eq-2',
+        },
+      ]);
 
       const token = await makeToken('Tech');
       const res = await request(app)
@@ -110,6 +110,14 @@ describe('Equipment API', () => {
       expect(res.body.equipment[1].status).toBe('DOWN');
       expect(res.body.equipment[1].currentDowntime).toBeTruthy();
       expect(res.body.equipment[1].currentDowntime.reasonCode).toBe('BREAKDOWN-HYDRAULIC');
+      expect(m.downtimeEvent.findMany).toHaveBeenCalledWith({
+        where: {
+          equipmentId: { in: ['eq-1', 'eq-2'] },
+          endedAt: null,
+        },
+        orderBy: { startedAt: 'desc' },
+      });
+      expect(m.downtimeEvent.findFirst).not.toHaveBeenCalled();
     });
 
     test('returns 401 without authentication', async () => {

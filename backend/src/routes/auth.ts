@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '../prisma/client.js';
 import { authLimiter } from '../middleware/rateLimiter.js';
 import type { Role } from '../middleware/auth.js';
+import { getJwtSecret } from '../config/jwt.js';
 
 const router = Router();
 
@@ -50,7 +51,6 @@ router.post('/login', authLimiter, async (req, res) => {
   }
 
   // Generate JWT with sub, role, tenantId, and name claims
-  const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'change-me');
   const token = await new SignJWT({
     sub: user.id,
     role: user.role as Role,
@@ -60,7 +60,7 @@ router.post('/login', authLimiter, async (req, res) => {
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('8h') // Shift-length token
-    .sign(secret);
+    .sign(getJwtSecret());
 
   return res.status(200).json({
     token,

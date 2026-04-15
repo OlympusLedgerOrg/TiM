@@ -11,6 +11,7 @@ const m = {
   step: { findUnique: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
   workOrderStep: { findUnique: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
   auditLog: { create: jest.fn() },
+  $transaction: jest.fn(),
   $queryRaw: jest.fn(),
 };
 jest.mock('../src/prisma/client', () => ({ prisma: m }));
@@ -36,6 +37,7 @@ const stepApi = () => m.step;
 describe('POST /complete', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    m.$transaction.mockImplementation(async (callback: (tx: typeof m) => unknown) => callback(m));
   });
 
   afterAll(async () => {
@@ -49,6 +51,18 @@ describe('POST /complete', () => {
     const token = await makeToken('Tech');
     const res = await request(app).post(url()).set('Authorization', `Bearer ${token}`).send({ notes: 'done' });
     expect(res.status).toBe(200);
+    expect(m.$transaction).toHaveBeenCalledTimes(1);
+    expect(stepApi().findFirst).toHaveBeenCalledWith({
+      where: { id: 'st-1', workOrderId: 'wo-1', tenantId: 'default' },
+    });
+    expect(m.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        tenantId: 'default',
+        workOrderId: 'wo-1',
+        stepId: 'st-1',
+        actorUserId: 'user-1',
+      }),
+    });
   });
 
   test('403 for Admin', async () => {

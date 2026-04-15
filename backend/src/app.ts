@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import type { ErrorRequestHandler } from 'express';
 import { Server } from 'socket.io';
 import { createServer } from 'http';
 import { jwtVerify } from 'jose';
@@ -25,6 +26,9 @@ import materialRoutes from './routes/materials.js';
 import { globalLimiter, sapLimiter } from './middleware/rateLimiter.js';
 import { httpsRedirect } from './middleware/httpsRedirect.js';
 import type { Role } from './middleware/auth.js';
+import { getJwtSecret, validateJwtSecret } from './config/jwt.js';
+
+validateJwtSecret();
 
 const app = express();
 const httpServer = createServer(app);
@@ -75,8 +79,7 @@ io.use(async (socket, next) => {
       return next(new Error('Authentication token required'));
     }
 
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'change-me');
-    const { payload } = await jwtVerify(token, secret);
+    const { payload } = await jwtVerify(token, getJwtSecret());
 
     // Attach user info to socket for later use
     socket.data.user = {
@@ -135,6 +138,44 @@ if (staticFilesPath) {
 
   console.log(`📦 Desktop mode: serving frontend from ${staticFilesPath}`);
 }
+
+const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
+  if (res.headersSent) {
+    return next(err);
+  }
+
+  const isInvalidJson =
+    err instanceof SyntaxError &&
+    'status' in err &&
+    req.is('application/json');
+  const status =
+    isInvalidJson
+      ? 400
+      : typeof err === 'object' &&
+          err !== null &&
+          'status' in err &&
+          typeof err.status === 'number' &&
+          err.status >= 400 &&
+          err.status < 600
+        ? err.status
+        : 500;
+  const message =
+    status >= 500
+      ? 'Internal server error'
+      : isInvalidJson
+        ? 'Invalid JSON body'
+        : err instanceof Error
+          ? err.message
+          : 'Unexpected error';
+
+  if (status >= 500) {
+    console.error(err);
+  }
+
+  return res.status(status).json({ message });
+};
+
+app.use(errorHandler);
 
 // Socket.IO connection handling with tenant validation
 io.on('connection', (socket) => {

@@ -1,5 +1,6 @@
 import { prisma } from '../prisma/client.js';
 import { commitToOlympus } from './olympusBridge.js';
+import { logger } from './logger.js';
 
 export async function submitLabReport(opts: {
   tenantId: string;
@@ -54,11 +55,11 @@ export async function submitLabReport(opts: {
         where: { id: report.id },
         data: { olympusCommitId: commitId },
       }).catch((err) => {
-        console.error('[LabReport] Failed to update olympusCommitId:', err);
+        logger.error({ err, reportId: report.id }, '[LabReport] Failed to update olympusCommitId');
       });
     }
   }).catch((err) => {
-    console.error('[LabReport] Failed to commit to Olympus:', err);
+    logger.error({ err }, '[LabReport] Failed to commit to Olympus');
   });
 
   return { status: 201, body: { report } };
@@ -105,11 +106,11 @@ export async function signoffLabReport(opts: {
         where: { id: signoff.id },
         data: { olympusCommitId: commitId },
       }).catch((err) => {
-        console.error('[Signoff] Failed to update olympusCommitId:', err);
+        logger.error({ err, signoffId: signoff.id }, '[Signoff] Failed to update olympusCommitId');
       });
     }
   }).catch((err) => {
-    console.error('[Signoff] Failed to commit to Olympus:', err);
+    logger.error({ err }, '[Signoff] Failed to commit to Olympus');
   });
 
   return { status: 201, body: { signoff } };

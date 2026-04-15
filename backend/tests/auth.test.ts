@@ -140,7 +140,11 @@ describe('POST /api/v1/auth/login', () => {
       .send({ email: 'super@test.com', password: testPassword });
 
     expect(res.status).toBe(500);
-    expect(res.body).toEqual({ message: 'Internal server error' });
+    expect(res.body.message).toEqual('Internal server error');
+    // Enterprise error handler also includes a requestId for traceability
+    if (res.body.requestId) {
+      expect(typeof res.body.requestId).toBe('string');
+    }
     consoleErrorSpy.mockRestore();
   });
 

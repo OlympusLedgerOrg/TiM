@@ -76,8 +76,10 @@ export const io = new Server(httpServer, {
 app.use(requestId);
 
 // 2. Security headers (X-Content-Type-Options, X-Frame-Options, CSP, etc.)
+//    CSP is disabled here because the SPA loads dynamic UI5 web components and
+//    inline styles. In production, enforce CSP at the CDN / reverse-proxy layer.
 app.use(helmet({
-  contentSecurityPolicy: false, // Disabled for SPA — CSP managed by frontend/CDN
+  contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false, // Allow cross-origin resources (SAP UI5)
 }));
 
@@ -94,8 +96,9 @@ app.use(compression());
 app.use(globalLimiter);
 
 // 7. Body parsing with size limits to prevent payload abuse
-app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+const bodyLimit = process.env.REQUEST_BODY_LIMIT || '1mb';
+app.use(express.json({ limit: bodyLimit }));
+app.use(express.urlencoded({ extended: true, limit: bodyLimit }));
 
 // 8. Structured request logging (pino-http)
 app.use(requestLogger);

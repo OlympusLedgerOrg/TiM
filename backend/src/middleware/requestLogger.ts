@@ -12,8 +12,9 @@ import { logger } from '../services/logger.js';
  */
 export const requestLogger = pinoHttp({
   logger,
-  // Use the request ID already set by the requestId middleware
-  genReqId: (req) => (req as Express.Request).id ?? 'unknown',
+  // Use the request ID already set by the requestId middleware.
+  // pino-http types genReqId with IncomingMessage, but Express extends it with `id`.
+  genReqId: (req) => (req as unknown as { id?: string }).id ?? 'unknown',
   // Quiet health checks and readiness probes
   autoLogging: {
     ignore: (req) => {

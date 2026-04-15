@@ -19,10 +19,10 @@ export function registerGracefulShutdown(
   io: SocketIOServer,
   timeoutMs = 15_000,
 ) {
-  let shuttingDown = false;
+  let shuttingDown = false; // Prevent duplicate handling
 
   async function shutdown(signal: string) {
-    if (shuttingDown) return;          // Prevent duplicate handling
+    if (shuttingDown) return;
     shuttingDown = true;
 
     logger.info({ signal }, 'Graceful shutdown initiated');

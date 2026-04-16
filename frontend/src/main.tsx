@@ -1,18 +1,20 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import FioriDashboard from './components/FioriDashboard';
-import CompleteStepForm from './components/CompleteStepForm';
-import StationDashboard from './components/StationDashboard';
-import AndonBoard from './components/AndonBoard';
-import SupervisorDashboard from './components/SupervisorDashboard';
-import ManagementDashboard from './components/ManagementDashboard';
-import AdminPanel from './components/AdminPanel';
-import LoginPage from './components/LoginPage';
-import ShiftReportViewer from './components/ShiftReportViewer';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import InstallPromptBanner from './components/InstallPromptBanner';
 import OfflineBanner from './components/OfflineBanner';
 import './styles/fiori.css';
+
+// ─── Lazy-loaded route components (code splitting) ──────────────────────────
+const FioriDashboard = lazy(() => import('./components/FioriDashboard'));
+const StationDashboard = lazy(() => import('./components/StationDashboard'));
+const AndonBoard = lazy(() => import('./components/AndonBoard'));
+const SupervisorDashboard = lazy(() => import('./components/SupervisorDashboard'));
+const ManagementDashboard = lazy(() => import('./components/ManagementDashboard'));
+const AdminPanel = lazy(() => import('./components/AdminPanel'));
+const LoginPage = lazy(() => import('./components/LoginPage'));
+const ShiftReportViewer = lazy(() => import('./components/ShiftReportViewer'));
 
 // Set SAP Fiori theme
 import '@ui5/webcomponents/dist/Assets.js';
@@ -49,76 +51,99 @@ function RequireRole({ allowed, children }: { allowed: string[]; children: React
   return <>{children}</>;
 }
 
+/** Loading spinner for lazy-loaded route transitions */
+function RouteLoadingFallback() {
+  return (
+    <div style={{
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      minHeight: '60vh',
+      fontFamily: "'72', Arial, sans-serif",
+      color: '#6a6d70',
+    }}>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>⏳</div>
+        <div>Loading…</div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* Public: Login page for supervisors/managers */}
-        <Route path="/login" element={<LoginPage />} />
+    <ErrorBoundary>
+      <BrowserRouter>
+        <Suspense fallback={<RouteLoadingFallback />}>
+          <Routes>
+            {/* Public: Login page for supervisors/managers */}
+            <Route path="/login" element={<LoginPage />} />
 
-        {/* Public: Andon board — no auth, read-only for wall-mounted TVs */}
-        <Route path="/andon" element={<AndonBoard />} />
+            {/* Public: Andon board — no auth, read-only for wall-mounted TVs */}
+            <Route path="/andon" element={<AndonBoard />} />
 
-        {/* Operator: Station dashboard — Tech, Supervisor, Admin */}
-        <Route path="/station" element={<StationDashboard />} />
-        <Route path="/station/:workCenter" element={<StationDashboard />} />
+            {/* Operator: Station dashboard — Tech, Supervisor, Admin */}
+            <Route path="/station" element={<StationDashboard />} />
+            <Route path="/station/:workCenter" element={<StationDashboard />} />
 
-        {/* Supervisor: Shift lead dashboard */}
-        <Route
-          path="/supervisor"
-          element={
-            <RequireRole allowed={['Supervisor', 'Admin']}>
-              <SupervisorDashboard />
-            </RequireRole>
-          }
-        />
+            {/* Supervisor: Shift lead dashboard */}
+            <Route
+              path="/supervisor"
+              element={
+                <RequireRole allowed={['Supervisor', 'Admin']}>
+                  <SupervisorDashboard />
+                </RequireRole>
+              }
+            />
 
-        {/* Management: Plant-wide analytics dashboard (Admin only) */}
-        <Route
-          path="/management"
-          element={
-            <RequireRole allowed={['Admin']}>
-              <ManagementDashboard />
-            </RequireRole>
-          }
-        />
+            {/* Management: Plant-wide analytics dashboard (Admin only) */}
+            <Route
+              path="/management"
+              element={
+                <RequireRole allowed={['Admin']}>
+                  <ManagementDashboard />
+                </RequireRole>
+              }
+            />
 
-        {/* Shift Reports: Auto-generated shift summaries */}
-        <Route
-          path="/shift-report"
-          element={
-            <RequireRole allowed={['Supervisor', 'Admin']}>
-              <ShiftReportViewer />
-            </RequireRole>
-          }
-        />
+            {/* Shift Reports: Auto-generated shift summaries */}
+            <Route
+              path="/shift-report"
+              element={
+                <RequireRole allowed={['Supervisor', 'Admin']}>
+                  <ShiftReportViewer />
+                </RequireRole>
+              }
+            />
 
-        {/* Admin: Operator management panel */}
-        <Route
-          path="/admin"
-          element={
-            <RequireRole allowed={['Admin']}>
-              <AdminPanel />
-            </RequireRole>
-          }
-        />
+            {/* Admin: Operator management panel */}
+            <Route
+              path="/admin"
+              element={
+                <RequireRole allowed={['Admin']}>
+                  <AdminPanel />
+                </RequireRole>
+              }
+            />
 
-        {/* Dashboard: Fiori overview */}
-        <Route path="/dashboard" element={<FioriDashboard />} />
+            {/* Dashboard: Fiori overview */}
+            <Route path="/dashboard" element={<FioriDashboard />} />
 
-        {/* Home: redirect to dashboard */}
-        <Route path="/" element={<FioriDashboard />} />
+            {/* Home: redirect to dashboard */}
+            <Route path="/" element={<FioriDashboard />} />
 
-        {/* Fallback */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+            {/* Fallback */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
 
-      {/* Global offline indicator — shown on all routes */}
-      <OfflineBanner />
+        {/* Global offline indicator — shown on all routes */}
+        <OfflineBanner />
 
-      {/* PWA install prompt — shown on all routes */}
-      <InstallPromptBanner />
-    </BrowserRouter>
+        {/* PWA install prompt — shown on all routes */}
+        <InstallPromptBanner />
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }
 

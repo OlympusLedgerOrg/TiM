@@ -5,6 +5,8 @@ import { Server } from 'socket.io';
 import { createServer } from 'http';
 import { jwtVerify } from 'jose';
 import path from 'path';
+import helmet from 'helmet';
+import compression from 'compression';
 import workOrderRoutes from './routes/workOrders.js';
 import healthRoutes from './routes/health.js';
 import queueRoutes from './routes/queue.js';
@@ -25,6 +27,12 @@ import bomRoutes from './routes/bom.js';
 import materialRoutes from './routes/materials.js';
 import { globalLimiter, sapLimiter } from './middleware/rateLimiter.js';
 import { httpsRedirect } from './middleware/httpsRedirect.js';
+import { requestId } from './middleware/requestId.js';
+import { requestLogger } from './middleware/requestLogger.js';
+import { corsMiddleware } from './middleware/cors.js';
+import { AppError } from './errors/AppError.js';
+import { registerGracefulShutdown } from './lifecycle/shutdown.js';
+import { logger } from './services/logger.js';
 import type { Role } from './middleware/auth.js';
 import { getJwtSecret, validateJwtSecret } from './config/jwt.js';
 
@@ -62,14 +70,38 @@ export const io = new Server(httpServer, {
   }
 });
 
-// Security middleware
+// ─── Enterprise Middleware Stack ─────────────────────────────────────────────
+
+// 1. Request ID — generate/propagate X-Request-ID for every request
+app.use(requestId);
+
+// 2. Security headers (X-Content-Type-Options, X-Frame-Options, CSP, etc.)
+//    CSP is disabled here because the SPA loads dynamic UI5 web components and
+//    inline styles. In production, enforce CSP at the CDN / reverse-proxy layer.
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false, // Allow cross-origin resources (SAP UI5)
+}));
+
+// 3. HTTPS redirect + HSTS (production only)
 app.use(httpsRedirect);
 
-// Rate limiting (recommended by CodeQL)
+// 4. CORS — allow REST API access from configured origins
+app.use(corsMiddleware);
+
+// 5. Response compression (gzip / deflate)
+app.use(compression());
+
+// 6. Rate limiting
 app.use(globalLimiter);
 
-// Middleware
-app.use(express.json());
+// 7. Body parsing with size limits to prevent payload abuse
+const bodyLimit = process.env.REQUEST_BODY_LIMIT || '1mb';
+app.use(express.json({ limit: bodyLimit }));
+app.use(express.urlencoded({ extended: true, limit: bodyLimit }));
+
+// 8. Structured request logging (pino-http)
+app.use(requestLogger);
 
 // Socket.IO authentication middleware
 io.use(async (socket, next) => {
@@ -130,24 +162,38 @@ if (staticFilesPath) {
     const indexPath = path.join(staticFilesPath, 'index.html');
     res.sendFile(indexPath, (err) => {
       if (err) {
-        console.error(`Failed to serve index.html: ${err.message}`);
+        logger.error({ err, path: indexPath }, 'Failed to serve index.html');
         res.status(500).send('Application files not found. Please reinstall the application.');
       }
     });
   });
 
-  console.log(`📦 Desktop mode: serving frontend from ${staticFilesPath}`);
+  logger.info({ staticFilesPath }, 'Desktop mode: serving frontend from static path');
 }
 
+// ─── Global Error Handler ────────────────────────────────────────────────────
 const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
   if (res.headersSent) {
     return next(err);
+  }
+
+  // Structured AppError instances carry their own status/code
+  if (err instanceof AppError) {
+    if (err.status >= 500) {
+      logger.error({ err, requestId: req.id, context: err.context }, err.message);
+    }
+    return res.status(err.status).json({
+      message: err.message,
+      code: err.code,
+      ...(req.id && { requestId: req.id }),
+    });
   }
 
   const isInvalidJson =
     err instanceof SyntaxError &&
     'status' in err &&
     req.is('application/json');
+
   const status =
     isInvalidJson
       ? 400
@@ -159,6 +205,7 @@ const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
           err.status < 600
         ? err.status
         : 500;
+
   const message =
     status >= 500
       ? 'Internal server error'
@@ -169,10 +216,15 @@ const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
           : 'Unexpected error';
 
   if (status >= 500) {
-    console.error(err);
+    logger.error({ err, requestId: req.id }, message);
+  } else {
+    logger.warn({ err, requestId: req.id }, message);
   }
 
-  return res.status(status).json({ message });
+  return res.status(status).json({
+    message,
+    ...(req.id && { requestId: req.id }),
+  });
 };
 
 app.use(errorHandler);
@@ -211,8 +263,11 @@ const PORT = process.env.PORT || 4000;
 // during tests causes EADDRINUSE when multiple test files import this module.
 if (process.env.NODE_ENV !== 'test') {
   httpServer.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
+    logger.info({ port: PORT, nodeEnv: process.env.NODE_ENV || 'development' }, `TiM server running on port ${PORT}`);
   });
+
+  // Register graceful shutdown handlers (SIGTERM / SIGINT)
+  registerGracefulShutdown(httpServer, io);
 }
 
 export const server = httpServer;

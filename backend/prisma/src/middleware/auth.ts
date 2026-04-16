@@ -1,5 +1,6 @@
 import { jwtVerify } from 'jose';
 import { NextFunction, Request, Response } from 'express';
+import { getJwtSecret } from '../../../src/config/jwt.js';
 
 export type Role = 'Tech' | 'Supervisor' | 'Admin';
 
@@ -17,8 +18,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
     if (!token) return res.status(401).json({ message: 'Missing token' });
 
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'change-me');
-    const { payload } = await jwtVerify(token, secret);
+    const { payload } = await jwtVerify(token, getJwtSecret());
     req.user = { id: String(payload.sub), role: payload.role as Role };
     return next();
   } catch {

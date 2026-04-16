@@ -9,6 +9,7 @@ export async function completeStepController(req: Request, res: Response) {
   if (!parse.success) return res.status(400).json({ message: 'Invalid body' });
 
   const result = await completeStep({
+    tenantId: req.user!.tenantId,
     workOrderId: req.params.workOrderId,
     stepId: req.params.stepId,
     notes: parse.data.notes,

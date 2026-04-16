@@ -1,6 +1,7 @@
 import { prisma } from '../prisma/client.js';
 import { commitToOlympus } from './olympusBridge.js';
 import { emitQueueUpdated } from '../sockets/workOrderSocket.js';
+import { logger } from './logger.js';
 
 export async function logMovement(opts: {
   tenantId: string;
@@ -57,11 +58,11 @@ export async function logMovement(opts: {
         where: { id: movement.id },
         data: { olympusCommitId: commitId },
       }).catch((err) => {
-        console.error('[Movement] Failed to update olympusCommitId:', err);
+        logger.error({ err, movementId: movement.id }, '[Movement] Failed to update olympusCommitId');
       });
     }
   }).catch((err) => {
-    console.error('[Movement] Failed to commit to Olympus:', err);
+    logger.error({ err }, '[Movement] Failed to commit to Olympus');
   });
 
   emitQueueUpdated(opts.tenantId);

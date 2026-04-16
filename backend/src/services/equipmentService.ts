@@ -70,15 +70,26 @@ export async function getEquipmentByWorkCenter(tenantId: string, workCenterCode:
     orderBy: { code: 'asc' },
   });
 
-  // Enrich with active downtime if any
-  const summaries: EquipmentSummary[] = [];
-  for (const eq of equipment) {
-    const activeDowntime = await prisma.downtimeEvent.findFirst({
-      where: { equipmentId: eq.id, endedAt: null },
-      orderBy: { startedAt: 'desc' },
-    });
+  const activeDowntimeEvents = equipment.length > 0
+    ? await prisma.downtimeEvent.findMany({
+        where: {
+          equipmentId: { in: equipment.map(eq => eq.id) },
+          endedAt: null,
+        },
+        orderBy: { startedAt: 'desc' },
+      })
+    : [];
 
-    summaries.push({
+  const downtimeByEquipment = new Map<string, typeof activeDowntimeEvents[0]>();
+  for (const event of activeDowntimeEvents) {
+    if (!downtimeByEquipment.has(event.equipmentId)) {
+      downtimeByEquipment.set(event.equipmentId, event);
+    }
+  }
+
+  const summaries: EquipmentSummary[] = equipment.map((eq) => {
+    const activeDowntime = downtimeByEquipment.get(eq.id) || null;
+    return {
       id: eq.id,
       code: eq.code,
       name: eq.name,
@@ -95,8 +106,8 @@ export async function getEquipmentByWorkCenter(tenantId: string, workCenterCode:
         startedAt: activeDowntime.startedAt.toISOString(),
         durationMin: (Date.now() - activeDowntime.startedAt.getTime()) / 60000,
       } : null,
-    });
-  }
+    };
+  });
 
   return { status: 200, body: { equipment: summaries } };
 }

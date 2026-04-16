@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { clockIn, type ShiftAssignment } from "../services/equipmentService";
+import { startAutoRefocus } from "../services/kioskMode";
 
 /**
  * BadgeLogin — Badge-scan landing screen for factory workers
@@ -40,6 +41,11 @@ export default function BadgeLogin({ workCenterCode, onLogin }: BadgeLoginProps)
   // Auto-focus badge input on mount
   useEffect(() => {
     inputRef.current?.focus();
+  }, []);
+
+  // Auto-refocus badge input after 30s of inactivity (kiosk mode)
+  useEffect(() => {
+    return startAutoRefocus(() => inputRef.current);
   }, []);
 
   async function handleSubmit() {

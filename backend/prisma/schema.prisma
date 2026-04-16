@@ -97,15 +97,16 @@ enum AlertSeverity {
 //////////////////////////////////////////////////////
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String
-  role      String   // Tech, Supervisor, Admin
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  role         String   // Tech, Supervisor, Admin
+  passwordHash String?  // bcrypt hash — null for badge-only floor workers
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id])
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   auditLogs AuditLog[]
   movements Movement[]
@@ -505,11 +506,13 @@ model InventoryMovement {
 //////////////////////////////////////////////////////
 
 model Operator {
-  id        String @id @default(uuid())
+  id        String  @id @default(uuid())
   name      String
   badgeId   String? @unique
+  isActive  Boolean @default(true)
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   steps     WorkOrderStep[]
   movements InventoryMovement[]

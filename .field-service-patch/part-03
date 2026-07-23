@@ -1,0 +1,442 @@
+(uuid())
++  tenantId        String
++  tenant          Tenant   @relation(fields: [tenantId], references: [id])
++
++  customerId      String
++  customer        Customer @relation(fields: [customerId], references: [id])
++
++  label           String?
++  addressLine1    String
++  addressLine2    String?
++  city            String
++  state           String
++  postalCode      String
++  latitude        Decimal? @db.Decimal(9, 6)
++  longitude       Decimal? @db.Decimal(9, 6)
++
++  accessNotes     String?
++  serviceNotes    String?
++  hazardNotes     String?
++  estimatedTankGallons Int?
++  isActive        Boolean  @default(true)
++
++  createdAt       DateTime @default(now())
++  updatedAt       DateTime @updatedAt
++
++  workOrders      FieldWorkOrder[]
++  callIntakes     CallIntake[]
++
++  @@index([tenantId, postalCode])
++  @@index([customerId])
++}
++
++model Truck {
++  id                String      @id @default(uuid())
++  tenantId          String
++  tenant            Tenant      @relation(fields: [tenantId], references: [id])
++
++  unitNumber        String
++  vin               String?
++  licensePlate      String?
++  description       String?
++  tankCapacityGallons Int
++  onboardGallons    Int         @default(0)
++  wasteCapabilities Json?
++  status            TruckStatus @default(AVAILABLE)
++  homeYard          String?
++  currentLatitude   Decimal?    @db.Decimal(9, 6)
++  currentLongitude  Decimal?    @db.Decimal(9, 6)
++
++  assignedDriverId  String?
++  assignedDriver    User?       @relation("TruckAssignedDriver", fields: [assignedDriverId], references: [id])
++
++  isActive          Boolean     @default(true)
++  version           Int         @default(0)
++  createdAt         DateTime    @default(now())
++  updatedAt         DateTime    @updatedAt
++
++  workOrders        FieldWorkOrder[]
++  loadEvents        TruckLoadEvent[]
++  routePlans        RoutePlan[]
++
++  @@unique([tenantId, unitNumber])
++  @@index([tenantId, status])
++}
++
++model CallIntake {
++  id              String           @id @default(uuid())
++  tenantId        String
++  tenant          Tenant           @relation(fields: [tenantId], references: [id])
++
++  externalCallId  String
++  callerPhone     String
++  callerName      String?
++  summary         String
++  transcript      String?
++  priority        ServicePriority  @default(ROUTINE)
++  requestedService ServiceType?
++  estimatedGallons Int?
++  status          CallIntakeStatus @default(RECEIVED)
++
++  customerId      String?
++  customer        Customer?        @relation(fields: [customerId], references: [id])
++  serviceLocationId String?
++  serviceLocation ServiceLocation? @relation(fields: [serviceLocationId], references: [id])
++  workOrderId     String?          @unique
++  workOrder       FieldWorkOrder?  @relation(fields: [workOrderId], references: [id])
++
++  receivedAt      DateTime         @default(now())
++  rawPayload      Json?
++  createdAt       DateTime         @default(now())
++  updatedAt       DateTime         @updatedAt
++
++  @@unique([tenantId, externalCallId])
++  @@index([tenantId, status, receivedAt])
++  @@index([tenantId, callerPhone])
++}
++
++model FieldWorkOrder {
++  id                String               @id @default(uuid())
++  tenantId          String
++  tenant            Tenant               @relation(fields: [tenantId], references: [id])
++
++  workOrderNumber   String
++  customerId        String
++  customer          Customer             @relation(fields: [customerId], references: [id])
++  serviceLocationId String
++  serviceLocation   ServiceLocation      @relation(fields: [serviceLocationId], references: [id])
++
++  serviceType       ServiceType
++  priority          ServicePriority      @default(ROUTINE)
++  status            FieldWorkOrderStatus @default(NEW)
++  estimatedGallons  Int                  @default(0)
++  actualGallons     Int?
++  requiredEvidence  Json?
++
++  scheduledStart    DateTime?
++  scheduledEnd      DateTime?
++  dispatchedAt      DateTime?
++  arrivedAt         DateTime?
++  startedAt         DateTime?
++  completedAt       DateTime?
++
++  assignedTruckId   String?
++  assignedTruck     Truck?               @relation(fields: [assignedTruckId], references: [id])
++  assignedDriverId  String?
++  assignedDriver    User?                @relation("FieldWorkOrderDriver", fields: [assignedDriverId], references: [id])
++
++  dispatcherNotes   String?
++  technicianComments String?
++  customerSignatureName String?
++  cancellationReason String?
++
++  sourceCallIntake  CallIntake?
++  photos            WorkOrderPhoto[]
++  loadEvents        TruckLoadEvent[]
++  routeStop         RouteStop?
++
++  createdAt         DateTime             @default(now())
++  updatedAt         DateTime             @updatedAt
++
++  @@unique([tenantId, workOrderNumber])
++  @@index([tenantId, status, scheduledStart])
++  @@index([assignedTruckId, status])
++  @@index([assignedDriverId, status])
++}
++
++model WorkOrderPhoto {
++  id              String       @id @default(uuid())
++  tenantId        String
++  tenant          Tenant       @relation(fields: [tenantId], references: [id])
++
++  fieldWorkOrderId String
++  fieldWorkOrder   FieldWorkOrder @relation(fields: [fieldWorkOrderId], references: [id], onDelete: Cascade)
++
++  type            EvidenceType
++  fileName        String
++  mimeType        String
++  storageKey      String
++  sha256          String
++  capturedAt      DateTime
++  capturedByUserId String
++  comment         String?
++  latitude        Decimal?     @db.Decimal(9, 6)
++  longitude       Decimal?     @db.Decimal(9, 6)
++  createdAt       DateTime     @default(now())
++
++  loadEvents      TruckLoadEvent[]
++
++  @@index([fieldWorkOrderId, type])
++  @@unique([tenantId, storageKey])
++}
++
++model TruckLoadEvent {
++  id                       String             @id @default(uuid())
++  tenantId                 String
++  tenant                   Tenant             @relation(fields: [tenantId], references: [id])
++
++  truckId                  String
++  truck                    Truck              @relation(fields: [truckId], references: [id])
++  fieldWorkOrderId         String?
++  fieldWorkOrder           FieldWorkOrder?    @relation(fields: [fieldWorkOrderId], references: [id])
++  evidencePhotoId          String?
++  evidencePhoto            WorkOrderPhoto?    @relation(fields: [evidencePhotoId], references: [id])
++
++  type                     TruckLoadEventType
++  deltaGallons             Int
++  resultingOnboardGallons  Int
++  disposalFacility         String?
++  disposalTicketNumber     String?
++  actorUserId              String
++  comments                 String?
++  occurredAt               DateTime           @default(now())
++  createdAt                DateTime           @default(now())
++
++  @@index([truckId, occurredAt])
++  @@index([fieldWorkOrderId])
++}
++
++model RoutePlan {
++  id              String      @id @default(uuid())
++  tenantId        String
++  tenant          Tenant      @relation(fields: [tenantId], references: [id])
++
++  name            String
++  serviceDate     DateTime    @db.Date
++  status          RouteStatus @default(DRAFT)
++  truckId         String
++  truck           Truck       @relation(fields: [truckId], references: [id])
++  driverId        String
++  driver          User        @relation("RoutePlanDriver", fields: [driverId], references: [id])
++  plannedStart    DateTime?
++  publishedAt     DateTime?
++  completedAt     DateTime?
++  createdAt       DateTime    @default(now())
++  updatedAt       DateTime    @updatedAt
++
++  stops           RouteStop[]
++
++  @@unique([tenantId, truckId, serviceDate])
++  @@index([tenantId, serviceDate, status])
++}
++
++model RouteStop {
++  id                     String         @id @default(uuid())
++  routePlanId            String
++  routePlan              RoutePlan      @relation(fields: [routePlanId], references: [id], onDelete: Cascade)
++  fieldWorkOrderId       String         @unique
++  fieldWorkOrder         FieldWorkOrder @relation(fields: [fieldWorkOrderId], references: [id])
++  sequence               Int
++  plannedArrival         DateTime?
++  plannedDeparture       DateTime?
++  estimatedTravelMinutes Int?
++  notes                  String?
++  createdAt              DateTime       @default(now())
++  updatedAt              DateTime       @updatedAt
++
++  @@unique([routePlanId, sequence])
++}
++
+diff --git a/backend/src/app.ts b/backend/src/app.ts
+index 205f081..62fdcf4 100644
+--- a/backend/src/app.ts
++++ b/backend/src/app.ts
+@@ -25,6 +25,8 @@ import operatorRoutes from './routes/operators.js';
+ import authRoutes from './routes/auth.js';
+ import bomRoutes from './routes/bom.js';
+ import materialRoutes from './routes/materials.js';
++import fieldServiceRoutes from './routes/fieldService.js';
++import callGuardRoutes from './routes/callGuard.js';
+ import { globalLimiter, sapLimiter } from './middleware/rateLimiter.js';
+ import { httpsRedirect } from './middleware/httpsRedirect.js';
+ import { requestId } from './middleware/requestId.js';
+@@ -145,6 +147,8 @@ app.use('/api/v1/operators', operatorRoutes);
+ app.use('/api/v1/auth', authRoutes);
+ app.use('/api/v1/bom', bomRoutes);
+ app.use('/api/v1/materials', materialRoutes);
++app.use('/api/v1/field-service', fieldServiceRoutes);
++app.use('/api/v1/intake/callguard', callGuardRoutes);
+ 
+ // Desktop Mode: Serve static frontend files when STATIC_FILES_PATH is set
+ // This allows the backend to serve the built frontend in the Electron app
+diff --git a/backend/src/middleware/integrationAuth.ts b/backend/src/middleware/integrationAuth.ts
+new file mode 100644
+index 0000000..13143db
+--- /dev/null
++++ b/backend/src/middleware/integrationAuth.ts
+@@ -0,0 +1,28 @@
++import { timingSafeEqual } from 'crypto';
++import type { NextFunction, Request, Response } from 'express';
++
++function safeEqual(left: string, right: string): boolean {
++  const a = Buffer.from(left);
++  const b = Buffer.from(right);
++  return a.length === b.length && timingSafeEqual(a, b);
++}
++
++export function requireCallGuardKey(req: Request, res: Response, next: NextFunction) {
++  const configuredKey = process.env.CALLGUARD_INTEGRATION_KEY;
++  if (!configuredKey || configuredKey === 'change-me') {
++    return res.status(503).json({
++      message: 'Call Guard integration is not configured',
++      code: 'CALLGUARD_NOT_CONFIGURED',
++    });
++  }
++
++  const providedKey = req.header('x-callguard-key') ?? '';
++  if (!providedKey || !safeEqual(providedKey, configuredKey)) {
++    return res.status(401).json({
++      message: 'Invalid Call Guard integration key',
++      code: 'INVALID_INTEGRATION_KEY',
++    });
++  }
++
++  return next();
++}
+diff --git a/backend/src/routes/callGuard.ts b/backend/src/routes/callGuard.ts
+new file mode 100644
+index 0000000..0fa3776
+--- /dev/null
++++ b/backend/src/routes/callGuard.ts
+@@ -0,0 +1,53 @@
++import { Router } from 'express';
++import { z } from 'zod';
++import { requireCallGuardKey } from '../middleware/integrationAuth.js';
++import { ingestCallGuardCall } from '../services/fieldServiceService.js';
++import { AppError } from '../errors/AppError.js';
++
++const router = Router();
++
++const serviceTypes = [
++  'SEPTIC_PUMPING',
++  'GREASE_TRAP',
++  'HOLDING_TANK',
++  'PORTABLE_RESTROOM',
++  'DRAIN_CLEANING',
++  'JETTING',
++  'INSPECTION',
++  'REPAIR',
++  'EMERGENCY_RESPONSE',
++  'OTHER',
++] as const;
++
++const intakeSchema = z.object({
++  externalCallId: z.string().min(1).max(200),
++  callerPhone: z.string().min(3).max(50),
++  callerName: z.string().trim().min(1).max(200).optional(),
++  summary: z.string().trim().min(3).max(5000),
++  transcript: z.string().max(100_000).optional(),
++  priority: z.enum(['ROUTINE', 'PRIORITY', 'URGENT', 'EMERGENCY']).default('ROUTINE'),
++  requestedService: z.enum(serviceTypes).optional(),
++  estimatedGallons: z.number().int().min(0).max(20_000).optional(),
++  rawPayload: z.record(z.unknown()).optional(),
++});
++
++router.post('/calls', requireCallGuardKey, async (req, res) => {
++  const parsed = intakeSchema.safeParse(req.body);
++  if (!parsed.success) {
++    throw AppError.badRequest(parsed.error.issues.map((issue) => issue.message).join('; '), 'INVALID_CALL_INTAKE');
++  }
++
++  const tenantId = process.env.CALLGUARD_TENANT_ID;
++  if (!tenantId) {
++    throw new AppError('Call Guard tenant is not configured', 503, 'CALLGUARD_TENANT_NOT_CONFIGURED');
++  }
++
++  const result = await ingestCallGuardCall({
++    tenantId,
++    ...parsed.data,
++  });
++
++  return res.status(result.duplicate ? 200 : 201).json(result);
++});
++
++export default router;
+diff --git a/backend/src/routes/fieldService.ts b/backend/src/routes/fieldService.ts
+new file mode 100644
+index 0000000..c5085c6
+--- /dev/null
++++ b/backend/src/routes/fieldService.ts
+@@ -0,0 +1,310 @@
++import { Router } from 'express';
++import { z } from 'zod';
++import { requireAuth, requireRole } from '../middleware/auth.js';
++import { AppError } from '../errors/AppError.js';
++import {
++  assignTruckToWorkOrder,
++  completeFieldWorkOrder,
++  convertCallIntake,
++  createCustomer,
++  createFieldWorkOrder,
++  createRoutePlan,
++  createServiceLocation,
++  createTruck,
++  getCustomer,
++  getDispatchBoard,
++  listFieldWorkOrders,
++  listRoutePlans,
++  listTrucks,
++  publishRoutePlan,
++  recordTruckLoadEvent,
++  registerWorkOrderPhoto,
++  searchCustomers,
++} from '../services/fieldServiceService.js';
++
++const router = Router();
++const supervisorRoles = requireRole(['Supervisor', 'Admin']);
++const fieldRoles = requireRole(['Tech', 'Supervisor', 'Admin']);
++
++const serviceTypes = [
++  'SEPTIC_PUMPING',
++  'GREASE_TRAP',
++  'HOLDING_TANK',
++  'PORTABLE_RESTROOM',
++  'DRAIN_CLEANING',
++  'JETTING',
++  'INSPECTION',
++  'REPAIR',
++  'EMERGENCY_RESPONSE',
++  'OTHER',
++] as const;
++
++const priorities = ['ROUTINE', 'PRIORITY', 'URGENT', 'EMERGENCY'] as const;
++const evidenceTypes = [
++  'BEFORE_SERVICE',
++  'ACCESS_POINT',
++  'CONDITION',
++  'AFTER_SERVICE',
++  'DISPOSAL_TICKET',
++  'CUSTOMER_SIGNATURE',
++  'OTHER',
++] as const;
++
++function parseBody<T>(schema: z.ZodSchema<T>, body: unknown): T {
++  const parsed = schema.safeParse(body);
++  if (!parsed.success) {
++    throw AppError.badRequest(parsed.error.issues.map((issue) => issue.message).join('; '), 'VALIDATION_ERROR');
++  }
++  return parsed.data;
++}
++
++function dateOrUndefined(value?: string): Date | undefined {
++  return value ? new Date(value) : undefined;
++}
++
++router.use(requireAuth);
++
++router.get('/dispatch-board', supervisorRoles, async (req, res) => {
++  return res.json(await getDispatchBoard(req.user!.tenantId));
++});
++
++router.get('/trucks', fieldRoles, async (req, res) => {
++  return res.json({ trucks: await listTrucks(req.user!.tenantId) });
++});
++
++router.post('/trucks', supervisorRoles, async (req, res) => {
++  const body = parseBody(z.object({
++    unitNumber: z.string().trim().min(1).max(50),
++    tankCapacityGallons: z.number().int().positive().max(20_000),
++    vin: z.string().trim().max(100).optional(),
++    licensePlate: z.string().trim().max(30).optional(),
++    description: z.string().trim().max(500).optional(),
++    homeYard: z.string().trim().max(200).op

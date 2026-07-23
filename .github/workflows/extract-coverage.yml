@@ -12,11 +12,11 @@ jobs:
   extract:
     runs-on: ubuntu-latest
     steps:
-      - name: Print measured coverage totals
+      - name: Print measured coverage details
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
-          COVERAGE_JOB_ID: "89254262723"
+          COVERAGE_JOB_ID: "89255300372"
         run: |
           set -euo pipefail
           curl -fsSL \
@@ -25,4 +25,5 @@ jobs:
             -H "X-GitHub-Api-Version: 2022-11-28" \
             "https://api.github.com/repos/${REPOSITORY}/actions/jobs/${COVERAGE_JOB_ID}/logs" \
             -o /tmp/coverage.log
-          grep -E "(Statements|Branches|Functions|Lines)[[:space:]]*:.*%" /tmp/coverage.log | tail -4
+          sed -n '/COVERAGE_TOTALS/,/LOWEST_LINE_COVERAGE/p' /tmp/coverage.log
+          grep -F 'Z {' /tmp/coverage.log | tail -25

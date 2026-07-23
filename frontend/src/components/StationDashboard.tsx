@@ -361,7 +361,7 @@ function ActiveWorkOrder({ wo, onConsume, onScanLot }: {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: missing ? "#f87171" : "#e2e8f0" }}>{c.material}</div>
-                  <div style={{ fontSize: 11, color: "#4b5563", fontFamily: "'DM Mono', monospace" }}>{c.matNum}</div>
+                  <div style={{ fontSize: 11, color: "#4b5563", fontFamily: "'DM Mono', monospace" }}>{c.materialNumber}</div>
                 </div>
                 <div style={{ textAlign: "right", flexShrink: 0 }}>
                   <div style={{ textAlign: "right" }}>

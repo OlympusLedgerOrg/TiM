@@ -42,8 +42,12 @@ jobs:
         run: npx prisma generate
       - name: Measure repository coverage without enforcing a threshold
         working-directory: backend
-        run: >-
-          npm test -- --runInBand --coverage
-          --collectCoverageFrom='src/**/*.ts'
-          --coverageReporters=text
-          --coverageReporters=text-summary
+        shell: bash
+        run: |
+          set +e
+          npm test -- --runInBand --coverage \
+            --collectCoverageFrom='src/**/*.ts' \
+            --coverageReporters=text-summary > /tmp/coverage.log 2>&1
+          status=$?
+          grep -A6 "Coverage summary" /tmp/coverage.log || tail -40 /tmp/coverage.log
+          exit "$status"

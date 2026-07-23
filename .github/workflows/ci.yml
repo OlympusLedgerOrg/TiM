@@ -208,11 +208,11 @@ jobs:
           npm ci --ignore-scripts
           npm audit --audit-level=high
 
-      - name: Audit frontend production dependencies
+      - name: Audit complete frontend dependency graph
         working-directory: frontend
         run: |
           npm ci --ignore-scripts
-          npm audit --omit=dev --audit-level=high
+          npm audit --audit-level=high
 
       - name: Generate CycloneDX SBOMs
         shell: bash

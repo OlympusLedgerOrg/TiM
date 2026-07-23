@@ -101,6 +101,26 @@ Additional supported categories:
 
 Photo records store an object-storage key and SHA-256 digest. The API registers evidence metadata; binary upload should use a dedicated object-storage upload flow rather than placing large image bodies in the JSON API.
 
+## Enterprise CI
+
+The repository uses one authoritative `CI` workflow and a stable `CI / required` branch-protection gate.
+
+The pipeline enforces:
+
+- Locked dependency installation on Node.js 22
+- Prisma generation, schema validation, clean migration replay, and drift detection on PostgreSQL 17
+- Strict backend and frontend TypeScript checks
+- Backend and frontend production builds
+- A global backend coverage minimum of 75% for statements and lines
+- Independent 75% statement and line gates for field-service orchestration, gallon rules, and Call Guard authentication
+- Full high-severity npm audits for both dependency graphs
+- CycloneDX SBOM generation and artifact retention
+- Hardened backend and frontend production-image builds with smoke checks
+- Coverage, test-result, frontend-build, and SBOM artifacts
+- Stale-run cancellation and least-privilege workflow permissions
+
+Current validated backend coverage is **76.32% statements** and **77.11% lines**, with **249 tests passing**.
+
 ## Local development
 
 Requirements:
@@ -132,10 +152,12 @@ Validation:
 ```bash
 cd backend
 npx prisma validate
+npm run typecheck
 npm run build
-npm test -- --runInBand
+npm run test:coverage
 
 cd ../frontend
+npm run typecheck
 npm run build
 ```
 

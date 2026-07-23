@@ -268,7 +268,10 @@ jobs:
           if [[ "${{ matrix.image }}" == "backend" ]]; then
             docker run --rm --entrypoint node "tim-${{ matrix.image }}:ci" --version
           else
-            docker run --rm --entrypoint nginx "tim-${{ matrix.image }}:ci" -t
+            docker run --rm \
+              --add-host backend:127.0.0.1 \
+              --entrypoint nginx \
+              "tim-${{ matrix.image }}:ci" -t
           fi
 
   required:

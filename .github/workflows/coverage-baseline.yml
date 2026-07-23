@@ -1,0 +1,49 @@
+name: coverage-baseline
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: tim
+          POSTGRES_PASSWORD: tim
+          POSTGRES_DB: tim_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tim -d tim_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://tim:tim@localhost:5432/tim_test
+      JWT_SECRET: coverage-baseline-secret
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - working-directory: backend
+        run: npm ci --ignore-scripts
+      - working-directory: backend
+        run: npx prisma generate
+      - name: Measure repository coverage without enforcing a threshold
+        working-directory: backend
+        run: >-
+          npm test -- --runInBand --coverage
+          --collectCoverageFrom='src/**/*.ts'
+          --coverageReporters=text
+          --coverageReporters=text-summary

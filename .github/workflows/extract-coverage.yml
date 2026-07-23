@@ -16,7 +16,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
-          COVERAGE_JOB_ID: "89255300372"
+          COVERAGE_JOB_ID: "89256903999"
         run: |
           set -euo pipefail
           curl -fsSL \

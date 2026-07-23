@@ -47,7 +47,31 @@ jobs:
           set +e
           npm test -- --runInBand --coverage \
             --collectCoverageFrom='src/**/*.ts' \
-            --coverageReporters=text-summary > /tmp/coverage.log 2>&1
+            --coverageReporters=json-summary > /tmp/coverage.log 2>&1
           status=$?
-          grep -A6 "Coverage summary" /tmp/coverage.log || tail -40 /tmp/coverage.log
+          node --input-type=commonjs <<'NODE'
+          const path = require('node:path');
+          const summary = require('./coverage/coverage-summary.json');
+          const total = summary.total;
+          console.log('COVERAGE_TOTALS');
+          for (const metric of ['statements', 'branches', 'functions', 'lines']) {
+            console.log(`${metric}=${total[metric].pct}%`);
+          }
+          console.log('LOWEST_LINE_COVERAGE');
+          Object.entries(summary)
+            .filter(([file]) => file !== 'total')
+            .map(([file, metrics]) => ({
+              file: path.relative(process.cwd(), file),
+              lines: metrics.lines.pct,
+              statements: metrics.statements.pct,
+              branches: metrics.branches.pct,
+              functions: metrics.functions.pct,
+            }))
+            .sort((a, b) => a.lines - b.lines)
+            .slice(0, 25)
+            .forEach((row) => console.log(JSON.stringify(row)));
+          NODE
+          if [ "$status" -ne 0 ]; then
+            tail -40 /tmp/coverage.log
+          fi
           exit "$status"

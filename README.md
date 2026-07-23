@@ -1,205 +1,150 @@
-🧰 TiM — Technician Work Order Management System
+# TiM — Field Service Operations Platform
 
-TiM is a full-stack industrial work-order management platform built for technicians, supervisors, and operations managers.
-It tracks work orders, step completion, and audit logs — with real-time updates and robust role-based access control (RBAC).
+TiM is being rebuilt as the operational system of record for liquid-waste and environmental field service.
 
-## 🌟 SAP Integration & Mobile Support
+**Call Guard protects the front door. TiM runs everything after the call.**
 
-**NEW**: SAP-compatible integration for **Trelleborg Rutherfordton NC**
-- ✅ OData v4-compatible APIs for SAP ERP integration
-- ✅ SAP Fiori UI5 responsive design
-- ✅ Multi-platform support: **Android, iOS, Windows**
-- 🔄 Progressive Web App (PWA) with manifest (offline support planned)
+```text
+Customer call
+    ↓
+Call Guard — screening, triage, transcript, urgency
+    ↓
+TiM — customer, site, work order, schedule, route, truck, gallons
+    ↓
+Technician — photos, comments, actual gallons, completion
+    ↓
+TiM — disposal ledger, billing-ready record, reporting, audit trail
+```
 
-📖 **[SAP Integration Documentation](docs/SAP_INTEGRATION.md)**  
-📱 **[Cross-Platform Deployment Guide](docs/CROSS_PLATFORM_DEPLOYMENT.md)**
+The field-service product is designed to replace fragmented CRM, dispatch, route, fleet-load, work-order, and evidence workflows while continuing to use Paylocity as the source of truth for employment, payroll, and approved time data.
 
-🚀 Tech Stack
+## What this rebuild adds
 
-Backend
+- Call Guard intake endpoint with idempotent call IDs
+- Customer and multi-location service records
+- Field work orders with service type, priority, schedule, and gallon estimates
+- Truck records with rated tank capacity, current onboard gallons, and remaining capacity
+- Capacity-aware assignment and route validation
+- Ordered route plans with truck and driver ownership
+- Required work-order photo evidence and technician comments
+- Immutable truck-load events for pumping, disposal, and corrections
+- Disposal facility, ticket, and ticket-photo capture
+- Dispatcher dashboard for calls, jobs, fleet capacity, and exceptions
+- Tenant isolation, JWT RBAC, request IDs, structured logging, and audit-ready records
 
-Node.js 22 + Express 5
+## Core operating invariants
 
-PostgreSQL 17 + Prisma 6 ORM
+1. **A truck is a constrained resource.** TiM will not assign estimated work beyond its available capacity.
+2. **Gallons are ledgered, not overwritten.** Pumping, disposal, and adjustments append a `TruckLoadEvent` and update the truck using optimistic concurrency.
+3. **Completion requires evidence.** A field work order cannot complete without actual gallons, technician comments, and every configured photo category.
+4. **Disposal requires proof.** Disposal events require a facility and disposal-ticket photo.
+5. **Calls are triaged before conversion.** Call Guard creates an intake record; dispatch converts it to a customer work order.
+6. **Legacy modules remain isolated during migration.** Existing manufacturing screens live under `/legacy/production` while the field-service product becomes the default application.
 
-Zod for request validation
+## Field-service API
 
-jose for JWT authentication
+Authenticated operations are under `/api/v1/field-service`:
 
-Socket.IO for real-time work-order events
+```text
+GET    /dispatch-board
+GET    /trucks
+POST   /trucks
+POST   /trucks/:truckId/load-events
+GET    /customers?query=
+POST   /customers
+GET    /customers/:customerId
+POST   /customers/:customerId/locations
+GET    /work-orders
+POST   /work-orders
+PUT    /work-orders/:workOrderId/assignment
+POST   /work-orders/:workOrderId/photos
+POST   /work-orders/:workOrderId/complete
+POST   /call-intakes/:intakeId/convert
+GET    /routes
+POST   /routes
+POST   /routes/:routePlanId/publish
+```
 
-Jest + Supertest for integration testing
+Call Guard posts normalized calls to:
 
-Frontend
+```text
+POST /api/v1/intake/callguard/calls
+X-CallGuard-Key: <CALLGUARD_INTEGRATION_KEY>
+```
 
-React 18 + TypeScript
+The server assigns the configured `CALLGUARD_TENANT_ID`; callers cannot select another tenant.
 
-Vite (or Next.js — flexible)
+## Truck gallon model
 
-TailwindCSS / shadcn-ui for styling
+```text
+availableGallons = tankCapacityGallons - onboardGallons
 
-Fetch API for service calls
+dispatchableGallons = availableGallons - reservedGallons
+```
 
-LocalStorage for JWT handling
+A route or assignment is rejected when its estimated gallons exceed `dispatchableGallons`. Completion performs the same check using actual gallons, preventing an unexpected field total from silently overfilling the truck record.
 
-🧩 Core Feature: Step Completion
+## Required evidence
 
-Technicians and Supervisors can mark steps within a work order as completed, attach notes, and trigger real-time updates across connected clients.
+Default completion evidence:
 
-Endpoint
-POST /api/v1/work-orders/:workOrderId/steps/:stepId/complete
+- `BEFORE_SERVICE`
+- `AFTER_SERVICE`
 
-Auth
+Additional supported categories:
 
-Requires valid JWT
+- `ACCESS_POINT`
+- `CONDITION`
+- `DISPOSAL_TICKET`
+- `CUSTOMER_SIGNATURE`
+- `OTHER`
 
-Allowed roles: Tech, Supervisor
+Photo records store an object-storage key and SHA-256 digest. The API registers evidence metadata; binary upload should use a dedicated object-storage upload flow rather than placing large image bodies in the JSON API.
 
-Request Body
-{
-  "notes": "Optional string notes here."
-}
+## Local development
 
-Response Codes
-Code	Meaning
-200	Step successfully completed
-403	Unauthorized role
-404	Work order or step not found
-409	Step already completed
-Side Effects
+Requirements:
 
-Updates the step’s status → COMPLETED
+- Node.js 22+
+- PostgreSQL
+- npm
 
-Persists technician notes
+Backend:
 
-Creates an entry in the AuditLog
-
-Emits stepCompleted event via Socket.IO to room work-order:{workOrderId}
-
-🧪 Testing (Integration: Jest + Supertest)
-
-File: tests/completeStep.test.ts
-
-Coverage:
-
-✅ Successful completion (Tech role → 200 OK)
-
-🚫 Unauthorized role (Admin → 403 Forbidden)
-
-🚫 Invalid IDs (→ 404 Not Found)
-
-🚫 Already completed (→ 409 Conflict)
-
-Mocks:
-
-Prisma client
-
-Socket.IO emit function
-
-JWT generation handled via jose for role-based tokens.
-
-💻 Frontend Service
-
-File: src/services/workOrderService.ts
-
-export async function completeWorkOrderStep({
-  workOrderId,
-  stepId,
-  notes,
-}: {
-  workOrderId: string;
-  stepId: string;
-  notes?: string;
-}): Promise<void> {
-  const token = localStorage.getItem('token');
-  if (!token) throw new Error('Not authenticated');
-
-  const res = await fetch(
-    `/api/v1/work-orders/${workOrderId}/steps/${stepId}/complete`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ notes }),
-    }
-  );
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Failed to complete step: ${res.status} ${err}`);
-  }
-}
-
-🧭 UI Component
-
-File: src/components/CompleteStepForm.tsx
-
-A simple, production-ready form for completing a step.
-Includes state management, loading/error UX, and a success callback.
-
-<CompleteStepForm
-  workOrderId="abc123"
-  stepId="step1"
-  onSuccess={() => toast.success('Step completed!')}
-/>
-
-📚 User Documentation
-
-See docs/how-to-complete-a-work-order-step.md
-
-Technicians can:
-
-Open a work order.
-
-Locate the step to complete.
-
-Add optional notes and click Complete Step.
-Once submitted, the step locks and notifies your supervisor in real time.
-
-⚙️ Local Development
-1. Clone the Repo
-git clone https://github.com/your-org/tim.git
-cd tim
-
-2. Backend Setup
+```bash
 cd backend
-npm install
+npm ci
 cp .env.example .env
 npx prisma migrate dev
 npm run dev
+```
 
-3. Frontend Setup
-cd ../frontend
-npm install
+Frontend:
+
+```bash
+cd frontend
+npm ci
 npm run dev
+```
 
-4. Run Tests
-npm run test
+Validation:
 
-🧾 License
+```bash
+cd backend
+npx prisma validate
+npm run build
+npm test -- --runInBand
 
-MIT © 2025 — TiM Development Team
+cd ../frontend
+npm run build
+```
 
-🔄 Roadmap
+## Product boundary
 
- 🔄 Offline mode with service worker sync
+TiM should own customer records, service locations, call-intake conversion, work orders, scheduling, dispatch, route plans, truck/load state, field evidence, disposal records, billing-ready service facts, and operational reporting.
 
- Step attachment uploads
+Call Guard should own first-contact call protection and structured intake. Paylocity should remain authoritative for employee/payroll data and later integrate through a narrow adapter rather than being duplicated.
 
- Supervisor dashboards
+## License
 
- Work order analytics (completion time, bottlenecks)
-
- ~~Multi-tenant enterprise mode~~
-
-✅ **SAP Integration** (Complete)
-- OData v4 APIs for materials, batches, movements
-- SAP Fiori UI5 design system
-- Cross-platform PWA support
-
-✅ **Multi-tenant Architecture** (Complete)
-- Tenant isolation at database level
-- JWT-based tenant identification
-- Plant/work center management
+MIT

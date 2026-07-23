@@ -25,6 +25,8 @@ import operatorRoutes from './routes/operators.js';
 import authRoutes from './routes/auth.js';
 import bomRoutes from './routes/bom.js';
 import materialRoutes from './routes/materials.js';
+import fieldServiceRoutes from './routes/fieldService.js';
+import callGuardRoutes from './routes/callGuard.js';
 import { globalLimiter, sapLimiter } from './middleware/rateLimiter.js';
 import { httpsRedirect } from './middleware/httpsRedirect.js';
 import { requestId } from './middleware/requestId.js';
@@ -145,6 +147,8 @@ app.use('/api/v1/operators', operatorRoutes);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/bom', bomRoutes);
 app.use('/api/v1/materials', materialRoutes);
+app.use('/api/v1/field-service', fieldServiceRoutes);
+app.use('/api/v1/intake/callguard', callGuardRoutes);
 
 // Desktop Mode: Serve static frontend files when STATIC_FILES_PATH is set
 // This allows the backend to serve the built frontend in the Electron app

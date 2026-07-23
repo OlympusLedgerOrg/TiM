@@ -1,0 +1,27 @@
+name: diagnose-field-service
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  backend-compile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Compile backend with concise output
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git init -q
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch -q --depth=1 origin "${GITHUB_SHA}"
+          git checkout -q FETCH_HEAD
+          cd backend
+          npm ci --silent
+          npx prisma generate >/dev/null
+          npm run build

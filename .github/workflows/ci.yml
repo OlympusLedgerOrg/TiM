@@ -1,68 +1,290 @@
-name: backend-tests
+name: CI
+
 on:
   push:
+    branches: [main]
   pull_request:
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    branches: [main]
+  merge_group:
+  workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: true
+  NODE_VERSION: "22"
+
+jobs:
+  backend:
+    name: backend-quality
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
     services:
       postgres:
-        image: postgres:15
+        image: postgres:17-alpine
         env:
           POSTGRES_USER: tim
           POSTGRES_PASSWORD: tim
-          POSTGRES_DB: tim_test
+          POSTGRES_DB: tim_ci
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U tim -d tim_test"
-          --health-interval 10s
+          --health-cmd "pg_isready -U tim -d tim_ci"
+          --health-interval 5s
           --health-timeout 5s
-          --health-retries 5
-
+          --health-retries 12
     env:
-      DATABASE_URL: postgresql://tim:tim@localhost:5432/tim_test
-      JWT_SECRET: test-secret
+      DATABASE_URL: postgresql://tim:tim@localhost:5432/tim_ci
+      JWT_SECRET: ci-only-secret-not-for-production
       NODE_ENV: test
-
+      CALLGUARD_INTEGRATION_KEY: ci-callguard-secret
+      CALLGUARD_TENANT_ID: default
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 22 }
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - name: Install backend
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install locked backend dependencies
         working-directory: backend
-        run: npm ci
+        run: npm ci --ignore-scripts
 
-      - name: Install psql client (used to wait / sanity-check DB)
+      - name: Generate and validate Prisma client
+        working-directory: backend
         run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client
+          npx prisma generate
+          npx prisma validate
 
-      - name: Wait for Postgres to be ready
-        env:
-          PGPASSWORD: tim
+      - name: Rehearse database migrations and reject drift
+        working-directory: backend
         run: |
-          for i in $(seq 1 30); do
-            if pg_isready -h localhost -U tim -d tim_test; then
-              echo "Postgres ready"
-              break
-            fi
-            echo "Waiting for Postgres..."
-            sleep 1
-          done
+          npx prisma migrate deploy
+          npx prisma migrate status
+          npx prisma migrate diff \
+            --from-url "$DATABASE_URL" \
+            --to-schema-datamodel prisma/schema.prisma \
+            --exit-code
 
-      - name: Prisma generate
+      - name: Type-check backend
         working-directory: backend
-        run: npx prisma generate
+        run: npm run typecheck
 
-      - name: Test
+      - name: Build backend
         working-directory: backend
+        run: npm run build
+
+      - name: Run tests and enforce coverage
+        working-directory: backend
+        run: |
+          mkdir -p test-results
+          npm run test:coverage -- --json --outputFile=test-results/jest-results.json
+
+      - name: Verify critical-module coverage and publish summary
+        working-directory: backend
+        shell: bash
+        run: |
+          node --input-type=commonjs <<'NODE'
+          const fs = require('node:fs');
+          const summary = JSON.parse(fs.readFileSync('coverage/coverage-summary.json', 'utf8'));
+          const threshold = 75;
+          const criticalFiles = [
+            'src/services/fieldServiceService.ts',
+            'src/services/fieldServiceRules.ts',
+            'src/middleware/integrationAuth.ts',
+          ];
+          const normalize = value => value.replaceAll('\\', '/');
+          const rows = [];
+          const failures = [];
+
+          const addRow = (label, metrics) => {
+            rows.push(`| ${label} | ${metrics.statements.pct}% | ${metrics.branches.pct}% | ${metrics.functions.pct}% | ${metrics.lines.pct}% |`);
+          };
+
+          addRow('Global', summary.total);
+          for (const relativeFile of criticalFiles) {
+            const key = Object.keys(summary).find(candidate => normalize(candidate).endsWith(relativeFile));
+            if (!key) {
+              failures.push(`Coverage report is missing ${relativeFile}`);
+              continue;
+            }
+            const metrics = summary[key];
+            addRow(relativeFile, metrics);
+            for (const metric of ['statements', 'lines']) {
+              if (metrics[metric].pct < threshold) {
+                failures.push(`${relativeFile} ${metric} coverage is ${metrics[metric].pct}%, below ${threshold}%`);
+              }
+            }
+          }
+
+          const markdown = [
+            '## Backend coverage',
+            '',
+            '| Scope | Statements | Branches | Functions | Lines |',
+            '|---|---:|---:|---:|---:|',
+            ...rows,
+            '',
+            `Global statements and lines must remain at or above ${threshold}%.`,
+          ].join('\n');
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${markdown}\n`);
+
+          if (failures.length) {
+            console.error(failures.join('\n'));
+            process.exit(1);
+          }
+          NODE
+
+      - name: Upload backend test and coverage artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: backend-test-evidence
+          path: |
+            backend/coverage
+            backend/test-results
+          if-no-files-found: warn
+          retention-days: 14
+
+  frontend:
+    name: frontend-quality
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install locked frontend dependencies
+        working-directory: frontend
+        run: npm ci --ignore-scripts
+
+      - name: Type-check frontend
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Upload frontend build
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          if-no-files-found: error
+          retention-days: 14
+
+  supply-chain:
+    name: dependency-security
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Audit backend dependencies
+        working-directory: backend
+        run: |
+          npm ci --ignore-scripts
+          npm audit --audit-level=high
+
+      - name: Audit complete frontend dependency graph
+        working-directory: frontend
+        run: |
+          npm ci --ignore-scripts
+          npm audit --audit-level=high
+
+      - name: Generate CycloneDX SBOMs
+        shell: bash
+        run: |
+          mkdir -p artifacts/sbom
+          cd backend
+          npm sbom --sbom-format cyclonedx > ../artifacts/sbom/backend.cdx.json
+          cd ../frontend
+          npm sbom --sbom-format cyclonedx > ../artifacts/sbom/frontend.cdx.json
+
+      - name: Upload SBOMs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: software-bill-of-materials
+          path: artifacts/sbom
+          if-no-files-found: error
+          retention-days: 30
+
+  containers:
+    name: container-${{ matrix.image }}
+    needs: [backend, frontend]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: backend
+            context: backend
+            dockerfile: backend/Dockerfile
+          - image: frontend
+            context: frontend
+            dockerfile: frontend/Dockerfile.prod
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Validate production compose configuration
         env:
-          JWT_SECRET: test-secret
-          DATABASE_URL: postgresql://tim:tim@localhost:5432/tim_test
-          NODE_ENV: test
-        run: npm test -- --runInBand
+          JWT_SECRET: ci-compose-secret
+        run: docker compose -f docker-compose.prod.yml config --quiet
+
+      - name: Build production image
+        run: >-
+          docker build --pull
+          --file "${{ matrix.dockerfile }}"
+          --tag "tim-${{ matrix.image }}:ci"
+          "${{ matrix.context }}"
+
+      - name: Smoke-check image
+        shell: bash
+        run: |
+          if [[ "${{ matrix.image }}" == "backend" ]]; then
+            docker run --rm --entrypoint node "tim-${{ matrix.image }}:ci" --version
+          else
+            docker run --rm \
+              --add-host backend:127.0.0.1 \
+              --entrypoint nginx \
+              "tim-${{ matrix.image }}:ci" -t
+          fi
+
+  required:
+    name: required
+    if: ${{ always() }}
+    needs: [backend, frontend, supply-chain, containers]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Enforce all CI gates
+        shell: bash
+        run: |
+          test "${{ needs.backend.result }}" = "success"
+          test "${{ needs.frontend.result }}" = "success"
+          test "${{ needs.supply-chain.result }}" = "success"
+          test "${{ needs.containers.result }}" = "success"

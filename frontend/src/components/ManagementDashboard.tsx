@@ -267,7 +267,7 @@ export default function ManagementDashboard() {
                 {scrapData.length > 0 ? (
                   <ResponsiveContainer width="100%" height={300}>
                     <PieChart>
-                      <Pie data={scrapData} dataKey="quantity" nameKey="code" cx="50%" cy="50%" outerRadius={100} label={({ code, percent }) => `${code} (${(percent * 100).toFixed(0)}%)`}>
+                      <Pie data={scrapData} dataKey="quantity" nameKey="code" cx="50%" cy="50%" outerRadius={100} label={({ name, percent }) => `${String(name ?? 'Unknown')} (${((percent ?? 0) * 100).toFixed(0)}%)`}>
                         {scrapData.map((_, i) => (
                           <Cell key={i} fill={COLORS[i % COLORS.length]} />
                         ))}

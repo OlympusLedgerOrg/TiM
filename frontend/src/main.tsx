@@ -7,6 +7,7 @@ import OfflineBanner from './components/OfflineBanner';
 import './styles/fiori.css';
 
 // ─── Lazy-loaded route components (code splitting) ──────────────────────────
+const DispatchDashboard = lazy(() => import('./components/DispatchDashboard'));
 const FioriDashboard = lazy(() => import('./components/FioriDashboard'));
 const StationDashboard = lazy(() => import('./components/StationDashboard'));
 const AndonBoard = lazy(() => import('./components/AndonBoard'));
@@ -126,11 +127,22 @@ function App() {
               }
             />
 
-            {/* Dashboard: Fiori overview */}
-            <Route path="/dashboard" element={<FioriDashboard />} />
+            {/* Primary product: field-service dispatch and logistics */}
+            <Route
+              path="/dispatch"
+              element={
+                <RequireRole allowed={['Supervisor', 'Admin']}>
+                  <DispatchDashboard />
+                </RequireRole>
+              }
+            />
 
-            {/* Home: redirect to dashboard */}
-            <Route path="/" element={<FioriDashboard />} />
+            {/* Legacy manufacturing dashboard retained during the rebuild */}
+            <Route path="/legacy/production" element={<FioriDashboard />} />
+            <Route path="/dashboard" element={<Navigate to="/dispatch" replace />} />
+
+            {/* Home: TiM is now field-service first */}
+            <Route path="/" element={<Navigate to={getRole() ? '/dispatch' : '/login'} replace />} />
 
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />

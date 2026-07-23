@@ -1,0 +1,28 @@
+name: diagnose-ci
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  extract:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Extract frontend type errors
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          FAILED_JOB_ID: "89262311295"
+        run: |
+          set -euo pipefail
+          curl -fsSL \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPOSITORY}/actions/jobs/${FAILED_JOB_ID}/logs" \
+            -o /tmp/job.log
+          grep -E "error TS[0-9]+|npm error|Process completed" /tmp/job.log | tail -160

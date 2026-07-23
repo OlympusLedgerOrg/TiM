@@ -11,7 +11,7 @@ jobs:
   repair:
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout field-service branch
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -26,7 +26,7 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Reclassify build tooling and remediate the lockfile
+      - name: Upgrade and validate the frontend toolchain
         working-directory: frontend
         shell: bash
         run: |
@@ -36,16 +36,19 @@ jobs:
           const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
           packageJson.devDependencies ??= {};
           for (const name of ['@vitejs/plugin-react', 'vite-plugin-pwa']) {
-            const version = packageJson.dependencies?.[name];
-            if (!version) throw new Error(`${name} was not found in dependencies`);
+            const version = packageJson.dependencies?.[name] ?? packageJson.devDependencies?.[name];
+            if (!version) throw new Error(`${name} was not found`);
             packageJson.devDependencies[name] = version;
-            delete packageJson.dependencies[name];
+            delete packageJson.dependencies?.[name];
           }
-          packageJson.dependencies = Object.fromEntries(Object.entries(packageJson.dependencies).sort());
+          packageJson.dependencies = Object.fromEntries(Object.entries(packageJson.dependencies ?? {}).sort());
           packageJson.devDependencies = Object.fromEntries(Object.entries(packageJson.devDependencies).sort());
           fs.writeFileSync('package.json', `${JSON.stringify(packageJson, null, 2)}\n`);
           NODE
-          npm install --package-lock-only --ignore-scripts
+          npm install --save-dev --ignore-scripts \
+            vite@8.1.5 \
+            @vitejs/plugin-react@latest \
+            vite-plugin-pwa@latest
           npm audit fix --ignore-scripts
           npm ci --ignore-scripts
           npm audit --audit-level=high
@@ -63,5 +66,5 @@ jobs:
           fi
           git config user.name "TiM Dependency Bot"
           git config user.email "actions@users.noreply.github.com"
-          git commit -m "security(frontend): repair dependency classification and lockfile"
+          git commit -m "security(frontend): upgrade Vite and repair dependency metadata"
           git push origin HEAD:field-service/rebuild-foundation

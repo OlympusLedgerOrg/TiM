@@ -46,8 +46,8 @@ jobs:
           fs.writeFileSync('package.json', `${JSON.stringify(packageJson, null, 2)}\n`);
           NODE
           npm install --save-dev --ignore-scripts \
-            vite@8.1.5 \
-            @vitejs/plugin-react@latest \
+            vite@^7.0.0 \
+            @vitejs/plugin-react@5.2.0 \
             vite-plugin-pwa@latest
           npm audit fix --ignore-scripts
           npm ci --ignore-scripts

@@ -184,6 +184,7 @@ router.post('/work-orders', supervisorRoles, async (req, res) => {
   const workOrder = await createFieldWorkOrder({
     tenantId: req.user!.tenantId,
     ...body,
+    priority: body.priority ?? 'ROUTINE',
     scheduledStart: dateOrUndefined(body.scheduledStart),
     scheduledEnd: dateOrUndefined(body.scheduledEnd),
   });

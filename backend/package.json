@@ -11,8 +11,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "start": "node dist/src/app.js",
     "test": "jest --detectOpenHandles --forceExit",
-    "test:ci": "jest --ci --runInBand",
-    "test:coverage": "jest --ci --runInBand --coverage",
+    "test:ci": "jest --ci --runInBand --detectOpenHandles --forceExit",
+    "test:coverage": "jest --ci --runInBand --coverage --detectOpenHandles --forceExit",
     "lint": "eslint . --ext .ts",
     "seed": "tsx prisma/seed.ts"
   },

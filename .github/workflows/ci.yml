@@ -65,11 +65,15 @@ jobs:
           npx prisma generate
           npx prisma validate
 
-      - name: Rehearse database migrations
+      - name: Rehearse database migrations and reject drift
         working-directory: backend
         run: |
           npx prisma migrate deploy
           npx prisma migrate status
+          npx prisma migrate diff \
+            --from-url "$DATABASE_URL" \
+            --to-schema-datamodel prisma/schema.prisma \
+            --exit-code
 
       - name: Type-check backend
         working-directory: backend
@@ -91,7 +95,6 @@ jobs:
         run: |
           node --input-type=commonjs <<'NODE'
           const fs = require('node:fs');
-          const path = require('node:path');
           const summary = JSON.parse(fs.readFileSync('coverage/coverage-summary.json', 'utf8'));
           const threshold = 75;
           const criticalFiles = [

@@ -8,8 +8,11 @@
   "scripts": {
     "dev": "tsx watch src/app.ts",
     "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "start": "node dist/src/app.js",
     "test": "jest --detectOpenHandles --forceExit",
+    "test:ci": "jest --ci --runInBand",
+    "test:coverage": "jest --ci --runInBand --coverage",
     "lint": "eslint . --ext .ts",
     "seed": "tsx prisma/seed.ts"
   },

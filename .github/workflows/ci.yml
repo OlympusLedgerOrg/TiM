@@ -59,6 +59,14 @@ jobs:
         working-directory: backend
         run: npx prisma generate
 
+      - name: Validate Prisma schema
+        working-directory: backend
+        run: npx prisma validate
+
+      - name: Build backend
+        working-directory: backend
+        run: npm run build
+
       - name: Test
         working-directory: backend
         env:
@@ -66,3 +74,18 @@ jobs:
           DATABASE_URL: postgresql://tim:tim@localhost:5432/tim_test
           NODE_ENV: test
         run: npm test -- --runInBand
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Install frontend
+        working-directory: frontend
+        run: npm ci
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build

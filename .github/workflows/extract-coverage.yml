@@ -12,11 +12,11 @@ jobs:
   extract:
     runs-on: ubuntu-latest
     steps:
-      - name: Print measured coverage details
+      - name: Print coverage gate failure
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
-          COVERAGE_JOB_ID: "89256903999"
+          COVERAGE_JOB_ID: "89258747904"
         run: |
           set -euo pipefail
           curl -fsSL \
@@ -25,5 +25,4 @@ jobs:
             -H "X-GitHub-Api-Version: 2022-11-28" \
             "https://api.github.com/repos/${REPOSITORY}/actions/jobs/${COVERAGE_JOB_ID}/logs" \
             -o /tmp/coverage.log
-          sed -n '/COVERAGE_TOTALS/,/LOWEST_LINE_COVERAGE/p' /tmp/coverage.log
-          grep -F 'Z {' /tmp/coverage.log | tail -25
+          grep -iE "coverage threshold|coverage summary|statements[[:space:]]*:|branches[[:space:]]*:|functions[[:space:]]*:|lines[[:space:]]*:|FAIL |error TS" /tmp/coverage.log | tail -80

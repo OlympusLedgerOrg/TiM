@@ -113,6 +113,29 @@ UPDATE "OlympusCommit"
  WHERE status = 'DEAD_LETTER' AND id = $1;
 ```
 
+## Testing
+
+Most of the suite mocks Prisma. The drainer's claim statement is raw SQL, so it
+additionally has database-backed tests in
+`backend/tests/olympusOutbox.integration.test.ts` — they cover `FOR UPDATE SKIP
+LOCKED`, the enum casts, `make_interval`, and that a rolled-back transaction
+leaves no outbox row.
+
+They run whenever `DATABASE_URL` is set, and print a notice to stderr when it is
+not, so a run without database coverage is never mistaken for a clean one. To
+run them locally against a throwaway database:
+
+```bash
+export DATABASE_URL=postgresql://tim:tim@localhost:5432/tim_test
+cd backend
+npx prisma db push --skip-generate --accept-data-loss
+npm test
+```
+
+`db push` rather than `migrate deploy`: the committed migrations are incremental
+`ALTER`s over a baseline that was never captured as a migration, so they cannot
+build a database from empty.
+
 ### What to monitor
 
 ```sql

@@ -59,6 +59,17 @@ jobs:
         working-directory: backend
         run: npx prisma generate
 
+      # Applies the schema to the test database so the database-backed tests
+      # (tests/olympusOutbox.integration.test.ts) actually run instead of
+      # skipping. `db push` rather than `migrate deploy`: the committed
+      # migrations are incremental ALTERs over a baseline that was never
+      # captured as a migration, so they cannot build a database from empty.
+      - name: Apply schema to test database
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql://tim:tim@localhost:5432/tim_test
+        run: npx prisma db push --skip-generate --accept-data-loss
+
       - name: Test
         working-directory: backend
         env:

@@ -81,9 +81,9 @@ enum DowntimeCategory {
 }
 
 enum ShiftPattern {
-  FIRST    // 7am-3pm
-  SECOND   // 3pm-11pm
-  THIRD    // 11pm-7am
+  FIRST // 7am-3pm
+  SECOND // 3pm-11pm
+  THIRD // 11pm-7am
 }
 
 enum AlertSeverity {
@@ -100,18 +100,18 @@ model User {
   id           String   @id @default(cuid())
   email        String   @unique
   name         String
-  role         String   // Tech, Supervisor, Admin
-  passwordHash String?  // bcrypt hash — null for badge-only floor workers
+  role         String // Tech, Supervisor, Admin
+  passwordHash String? // bcrypt hash — null for badge-only floor workers
   tenantId     String
   tenant       Tenant   @relation(fields: [tenantId], references: [id])
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  auditLogs AuditLog[]
-  movements Movement[]
+  auditLogs  AuditLog[]
+  movements  Movement[]
   labReports LabReport[]
-  signoffs  Signoff[]
+  signoffs   Signoff[]
 }
 
 model WorkOrder {
@@ -123,26 +123,26 @@ model WorkOrder {
   createdAt DateTime   @default(now())
 
   // --- Production execution fields ---
-  materialId     String?
-  material       Material?       @relation("WorkOrderOutputMaterial", fields: [materialId], references: [id])
+  materialId String?
+  material   Material? @relation("WorkOrderOutputMaterial", fields: [materialId], references: [id])
 
-  bomId          String?
-  bom            BOM?            @relation(fields: [bomId], references: [id])
+  bomId String?
+  bom   BOM?    @relation(fields: [bomId], references: [id])
 
-  quantity       Float?
-  uom            String?
+  quantity Float?
+  uom      String?
 
-  status         WorkOrderStatus @default(PLANNED)
+  status WorkOrderStatus @default(PLANNED)
 
   scheduledStart DateTime?
   scheduledEnd   DateTime?
   startedAt      DateTime?
   completedAt    DateTime?
 
-  updatedAt      DateTime        @updatedAt
+  updatedAt DateTime @updatedAt
 
   // --- Production relations ---
-  workOrderSteps     WorkOrderStep[]  // Advanced MES step execution with operator tracking
+  workOrderSteps     WorkOrderStep[] // Advanced MES step execution with operator tracking
   reservations       Reservation[]
   outputLots         Lot[]
   inventoryMovements InventoryMovement[]
@@ -176,102 +176,102 @@ model AuditLog {
 }
 
 model Tenant {
-  id             String       @id @default(cuid())
-  name           String
-  sapPlantCode   String?
-  createdAt      DateTime     @default(now())
-  users          User[]
-  plantAreas     PlantArea[]
-  workCenters    WorkCenter[]
-  materials      Material[]
-  batches        Batch[]
-  movements      Movement[]
-  labReports     LabReport[]
-  signoffs       Signoff[]
-  equipment      Equipment[]
+  id           String       @id @default(cuid())
+  name         String
+  sapPlantCode String?
+  createdAt    DateTime     @default(now())
+  users        User[]
+  plantAreas   PlantArea[]
+  workCenters  WorkCenter[]
+  materials    Material[]
+  batches      Batch[]
+  movements    Movement[]
+  labReports   LabReport[]
+  signoffs     Signoff[]
+  equipment    Equipment[]
 }
 
 // PlantArea: Physical building / section of the Rutherfordton site.
 // Trelleborg Rutherfordton has three: Main Plant, Shipping, New Plant.
 // Work centers and equipment belong to a plant area.
 model PlantArea {
-  id              String       @id @default(uuid())
-  tenantId        String
-  tenant          Tenant       @relation(fields: [tenantId], references: [id])
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
 
-  code            String       // "MAIN", "SHIP", "NEW"
-  name            String       // "Main Plant", "Shipping", "New Plant"
-  description     String?
+  code        String // "MAIN", "SHIP", "NEW"
+  name        String // "Main Plant", "Shipping", "New Plant"
+  description String?
 
-  isActive        Boolean      @default(true)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  workCenters     WorkCenter[]
-  equipment       Equipment[]
+  workCenters WorkCenter[]
+  equipment   Equipment[]
 
   @@unique([tenantId, code])
 }
 
 model WorkCenter {
-  id              String     @id @default(cuid())
-  tenantId        String
-  tenant          Tenant     @relation(fields: [tenantId], references: [id])
-  name            String
-  code            String
-  description     String?
+  id          String  @id @default(cuid())
+  tenantId    String
+  tenant      Tenant  @relation(fields: [tenantId], references: [id])
+  name        String
+  code        String
+  description String?
 
-  plantAreaId     String?
-  plantArea       PlantArea? @relation(fields: [plantAreaId], references: [id])
+  plantAreaId String?
+  plantArea   PlantArea? @relation(fields: [plantAreaId], references: [id])
 
-  createdAt       DateTime   @default(now())
-  batches         Batch[]    @relation("CurrentWorkCenter")
-  movementsFrom   Movement[] @relation("FromWorkCenter")
-  movementsTo     Movement[] @relation("ToWorkCenter")
-  equipment       Equipment[]
+  createdAt     DateTime    @default(now())
+  batches       Batch[]     @relation("CurrentWorkCenter")
+  movementsFrom Movement[]  @relation("FromWorkCenter")
+  movementsTo   Movement[]  @relation("ToWorkCenter")
+  equipment     Equipment[]
 
   @@unique([tenantId, code])
 }
 
 model Material {
-  id                String    @id @default(cuid())
+  id                String   @id @default(cuid())
   tenantId          String
-  tenant            Tenant    @relation(fields: [tenantId], references: [id])
+  tenant            Tenant   @relation(fields: [tenantId], references: [id])
   sapMaterialNumber String?
   description       String
-  unitOfMeasure     String    @default("EA")
-  createdAt         DateTime  @default(now())
+  unitOfMeasure     String   @default("EA")
+  createdAt         DateTime @default(now())
   batches           Batch[]
 
   // --- New fields for lot genealogy & BOM engine ---
-  name              String?
-  isBatchTracked    Boolean   @default(true)
-  updatedAt         DateTime  @updatedAt
+  name           String?
+  isBatchTracked Boolean  @default(true)
+  updatedAt      DateTime @updatedAt
 
   // --- New relations ---
-  lots              Lot[]
-  boms              BOM[]       @relation("BOMOutputMaterial")
-  bomItems          BOMItem[]   @relation("BOMItemMaterial")
-  workOrders        WorkOrder[] @relation("WorkOrderOutputMaterial")
+  lots       Lot[]
+  boms       BOM[]       @relation("BOMOutputMaterial")
+  bomItems   BOMItem[]   @relation("BOMItemMaterial")
+  workOrders WorkOrder[] @relation("WorkOrderOutputMaterial")
 
   @@unique([tenantId, sapMaterialNumber])
 }
 
 model Batch {
-  id             String      @id @default(cuid())
-  tenantId       String
-  tenant         Tenant      @relation(fields: [tenantId], references: [id])
-  materialId     String
-  material       Material    @relation(fields: [materialId], references: [id])
-  lotNumber      String
-  quantity       Decimal
-  status         BatchStatus @default(IN_QUEUE)
-  workCenterId   String
-  workCenter     WorkCenter  @relation("CurrentWorkCenter", fields: [workCenterId], references: [id])
-  movements      Movement[]
-  labReports     LabReport[]
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  id           String      @id @default(cuid())
+  tenantId     String
+  tenant       Tenant      @relation(fields: [tenantId], references: [id])
+  materialId   String
+  material     Material    @relation(fields: [materialId], references: [id])
+  lotNumber    String
+  quantity     Decimal
+  status       BatchStatus @default(IN_QUEUE)
+  workCenterId String
+  workCenter   WorkCenter  @relation("CurrentWorkCenter", fields: [workCenterId], references: [id])
+  movements    Movement[]
+  labReports   LabReport[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 
   @@unique([tenantId, lotNumber])
 }
@@ -295,18 +295,18 @@ model Movement {
 }
 
 model LabReport {
-  id              String     @id @default(cuid())
+  id              String    @id @default(cuid())
   tenantId        String
-  tenant          Tenant     @relation(fields: [tenantId], references: [id])
+  tenant          Tenant    @relation(fields: [tenantId], references: [id])
   batchId         String
-  batch           Batch      @relation(fields: [batchId], references: [id])
+  batch           Batch     @relation(fields: [batchId], references: [id])
   fileHash        String
   fileUrl         String
   fileName        String
-  result          LabResult  @default(PENDING)
+  result          LabResult @default(PENDING)
   submittedBy     String
-  submittedByUser User       @relation(fields: [submittedBy], references: [id])
-  submittedAt     DateTime   @default(now())
+  submittedByUser User      @relation(fields: [submittedBy], references: [id])
+  submittedAt     DateTime  @default(now())
   olympusCommitId String?
   signoff         Signoff?
 }
@@ -329,42 +329,42 @@ model Signoff {
 //////////////////////////////////////////////////////
 
 model Lot {
-  id            String    @id @default(uuid())
-  materialId    String
-  material      Material  @relation(fields: [materialId], references: [id])
+  id         String   @id @default(uuid())
+  materialId String
+  material   Material @relation(fields: [materialId], references: [id])
 
-  quantity      Float
-  uom           String
+  quantity Float
+  uom      String
 
-  status        LotStatus @default(ACTIVE)
-  expiryDate    DateTime?
+  status     LotStatus @default(ACTIVE)
+  expiryDate DateTime?
 
-  workOrderId   String?
-  workOrder     WorkOrder? @relation(fields: [workOrderId], references: [id])
+  workOrderId String?
+  workOrder   WorkOrder? @relation(fields: [workOrderId], references: [id])
 
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Genealogy edges
-  parentEdges   LotEdge[] @relation("ParentLot")
-  childEdges    LotEdge[] @relation("ChildLot")
+  parentEdges LotEdge[] @relation("ParentLot")
+  childEdges  LotEdge[] @relation("ChildLot")
 
-  reservations  Reservation[]
-  movements     InventoryMovement[]
+  reservations Reservation[]
+  movements    InventoryMovement[]
 }
 
 model LotEdge {
-  id           String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  parentLotId  String
-  childLotId   String
+  parentLotId String
+  childLotId  String
 
-  parentLot    Lot @relation("ParentLot", fields: [parentLotId], references: [id])
-  childLot     Lot @relation("ChildLot", fields: [childLotId], references: [id])
+  parentLot Lot @relation("ParentLot", fields: [parentLotId], references: [id])
+  childLot  Lot @relation("ChildLot", fields: [childLotId], references: [id])
 
-  quantity     Float // amount transferred from parent → child
+  quantity Float // amount transferred from parent → child
 
-  createdAt    DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@unique([parentLotId, childLotId])
 }
@@ -374,59 +374,59 @@ model LotEdge {
 //////////////////////////////////////////////////////
 
 model BOM {
-  id           String   @id @default(uuid())
-  materialId   String   // output material
-  material     Material @relation("BOMOutputMaterial", fields: [materialId], references: [id])
+  id         String   @id @default(uuid())
+  materialId String // output material
+  material   Material @relation("BOMOutputMaterial", fields: [materialId], references: [id])
 
-  version      Int
-  isActive     Boolean  @default(true)
+  version  Int
+  isActive Boolean @default(true)
 
-  validFrom    DateTime
-  validTo      DateTime?
+  validFrom DateTime
+  validTo   DateTime?
 
-  createdAt    DateTime @default(now())
+  createdAt DateTime @default(now())
 
-  items        BOMItem[]
-  steps        BOMStep[]
-  workOrders   WorkOrder[]
+  items      BOMItem[]
+  steps      BOMStep[]
+  workOrders WorkOrder[]
 
   @@unique([materialId, version])
 }
 
 model BOMItem {
-  id          String   @id @default(uuid())
-  bomId       String
-  bom         BOM      @relation(fields: [bomId], references: [id])
+  id    String @id @default(uuid())
+  bomId String
+  bom   BOM    @relation(fields: [bomId], references: [id])
 
-  materialId  String
-  material    Material @relation("BOMItemMaterial", fields: [materialId], references: [id])
+  materialId String
+  material   Material @relation("BOMItemMaterial", fields: [materialId], references: [id])
 
-  quantity    Float
-  uom         String
+  quantity Float
+  uom      String
 
-  isOptional  Boolean  @default(false)
+  isOptional Boolean @default(false)
 
   // for conditional logic later
-  condition   String?  // JSON logic or rule reference
+  condition String? // JSON logic or rule reference
 
-  createdAt   DateTime @default(now())
+  createdAt DateTime @default(now())
 }
 
 model BOMStep {
-  id          String   @id @default(uuid())
-  bomId       String
-  bom         BOM      @relation(fields: [bomId], references: [id])
+  id    String @id @default(uuid())
+  bomId String
+  bom   BOM    @relation(fields: [bomId], references: [id])
 
-  name        String
-  sequence    Int
+  name     String
+  sequence Int
 
-  machineType String?  // press, mixer, etc
+  machineType String? // press, mixer, etc
   durationSec Int?
 
   // constraints (store as JSON for flexibility)
   constraints Json?
 
-  createdAt   DateTime @default(now())
+  createdAt DateTime @default(now())
 
   workOrderSteps WorkOrderStep[]
 }
@@ -439,25 +439,25 @@ model BOMStep {
 // Used for production tracking with BOM steps, operator assignment, and data recording
 // Distinct from Step model which is for simple work order tracking
 model WorkOrderStep {
-  id            String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  workOrderId   String
-  workOrder     WorkOrder @relation(fields: [workOrderId], references: [id])
+  workOrderId String
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id])
 
-  bomStepId     String
-  bomStep       BOMStep  @relation(fields: [bomStepId], references: [id])
+  bomStepId String
+  bomStep   BOMStep @relation(fields: [bomStepId], references: [id])
 
-  status        String   // pending, in_progress, completed, blocked
+  status String // pending, in_progress, completed, blocked
 
-  startedAt     DateTime?
-  completedAt   DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
 
-  operatorId    String?
-  operator      Operator? @relation(fields: [operatorId], references: [id])
+  operatorId String?
+  operator   Operator? @relation(fields: [operatorId], references: [id])
 
-  data          Json?    // actual recorded values (temp, pressure, etc)
+  data Json? // actual recorded values (temp, pressure, etc)
 
-  createdAt     DateTime @default(now())
+  createdAt DateTime @default(now())
 }
 
 //////////////////////////////////////////////////////
@@ -465,40 +465,40 @@ model WorkOrderStep {
 //////////////////////////////////////////////////////
 
 model Reservation {
-  id            String @id @default(uuid())
+  id String @id @default(uuid())
 
-  lotId         String
-  lot           Lot @relation(fields: [lotId], references: [id])
+  lotId String
+  lot   Lot    @relation(fields: [lotId], references: [id])
 
-  workOrderId   String
-  workOrder     WorkOrder @relation(fields: [workOrderId], references: [id])
+  workOrderId String
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id])
 
-  quantity      Float
+  quantity Float
 
-  status        ReservationStatus @default(ACTIVE)
+  status ReservationStatus @default(ACTIVE)
 
-  createdAt     DateTime @default(now())
+  createdAt DateTime @default(now())
 }
 
 model InventoryMovement {
-  id            String @id @default(uuid())
+  id String @id @default(uuid())
 
-  lotId         String
-  lot           Lot @relation(fields: [lotId], references: [id])
+  lotId String
+  lot   Lot    @relation(fields: [lotId], references: [id])
 
-  type          MovementType
+  type MovementType
 
-  quantity      Float
+  quantity Float
 
-  workOrderId   String?
-  workOrder     WorkOrder? @relation(fields: [workOrderId], references: [id])
+  workOrderId String?
+  workOrder   WorkOrder? @relation(fields: [workOrderId], references: [id])
 
-  operatorId    String?
-  operator      Operator? @relation(fields: [operatorId], references: [id])
+  operatorId String?
+  operator   Operator? @relation(fields: [operatorId], references: [id])
 
-  metadata      Json?
+  metadata Json?
 
-  createdAt     DateTime @default(now())
+  createdAt DateTime @default(now())
 }
 
 //////////////////////////////////////////////////////
@@ -506,10 +506,10 @@ model InventoryMovement {
 //////////////////////////////////////////////////////
 
 model Operator {
-  id        String  @id @default(uuid())
-  name      String
-  badgeId   String? @unique
-  isActive  Boolean @default(true)
+  id       String  @id @default(uuid())
+  name     String
+  badgeId  String? @unique
+  isActive Boolean @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -524,82 +524,82 @@ model Operator {
 //////////////////////////////////////////////////////
 
 model Equipment {
-  id              String          @id @default(uuid())
-  tenantId        String
-  tenant          Tenant          @relation(fields: [tenantId], references: [id])
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
 
-  code            String          // e.g., "PRESS-01", "MIX-03"
-  name            String          // e.g., "Banbury Mixer #3"
-  type            String          // press, mixer, extruder, calender, mill
-  description     String?
+  code        String // e.g., "PRESS-01", "MIX-03"
+  name        String // e.g., "Banbury Mixer #3"
+  type        String // press, mixer, extruder, calender, mill
+  description String?
 
-  workCenterId    String?
-  workCenter      WorkCenter?     @relation(fields: [workCenterId], references: [id])
+  workCenterId String?
+  workCenter   WorkCenter? @relation(fields: [workCenterId], references: [id])
 
-  plantAreaId     String?
-  plantArea       PlantArea?      @relation(fields: [plantAreaId], references: [id])
+  plantAreaId String?
+  plantArea   PlantArea? @relation(fields: [plantAreaId], references: [id])
 
   // Axxos mapping
-  axxosEquipmentId String?        // External Axxos equipment identifier
+  axxosEquipmentId String? // External Axxos equipment identifier
 
   // Current state (denormalized for fast reads on station dashboard)
-  status          EquipmentStatus @default(IDLE)
-  statusSince     DateTime        @default(now())
+  status            EquipmentStatus @default(IDLE)
+  statusSince       DateTime        @default(now())
   currentOperatorId String?
 
   // Capacity / targets
-  targetCycleTimeSec Int?         // Expected cycle time in seconds
-  targetOee       Float?          // Target OEE % (e.g., 0.85)
+  targetCycleTimeSec Int? // Expected cycle time in seconds
+  targetOee          Float? // Target OEE % (e.g., 0.85)
 
-  isActive        Boolean         @default(true)
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  downtimeEvents  DowntimeEvent[]
+  downtimeEvents DowntimeEvent[]
 
   @@unique([tenantId, code])
 }
 
 model DowntimeEvent {
-  id              String           @id @default(uuid())
-  tenantId        String
+  id       String @id @default(uuid())
+  tenantId String
 
-  equipmentId     String
-  equipment       Equipment        @relation(fields: [equipmentId], references: [id])
+  equipmentId String
+  equipment   Equipment @relation(fields: [equipmentId], references: [id])
 
-  category        DowntimeCategory
-  reasonCode      String           // e.g., "MAT-WAIT", "MOLD-CHANGE", "BREAKDOWN-HYDRAULIC"
-  reasonText      String?          // Free-text from operator: "Waiting for compound from mixer"
+  category   DowntimeCategory
+  reasonCode String // e.g., "MAT-WAIT", "MOLD-CHANGE", "BREAKDOWN-HYDRAULIC"
+  reasonText String? // Free-text from operator: "Waiting for compound from mixer"
 
-  startedAt       DateTime         @default(now())
-  endedAt         DateTime?        // null = still down
-  durationMin     Float?           // Computed on close, or periodically updated
+  startedAt   DateTime  @default(now())
+  endedAt     DateTime? // null = still down
+  durationMin Float? // Computed on close, or periodically updated
 
   // Who reported it
-  reportedById    String?
-  workOrderId     String?          // Which WO was affected
-  plantAreaCode   String?          // Which plant area: "MAIN", "SHIP", "NEW"
+  reportedById  String?
+  workOrderId   String? // Which WO was affected
+  plantAreaCode String? // Which plant area: "MAIN", "SHIP", "NEW"
 
   // Escalation
-  escalatedToTeams Boolean         @default(false)
-  escalatedAt     DateTime?
+  escalatedToTeams Boolean   @default(false)
+  escalatedAt      DateTime?
 
-  metadata        Json?            // Axxos sync data, machine codes, etc.
+  metadata Json? // Axxos sync data, machine codes, etc.
 
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model ScrapReason {
-  id              String   @id @default(uuid())
-  tenantId        String
+  id       String @id @default(uuid())
+  tenantId String
 
-  code            String   // e.g., "VISC-OOS", "CONTAM", "CURE-FAIL", "EQUIP-MAL"
-  description     String   // e.g., "Off-spec viscosity", "Contamination"
-  category        String   // quality, equipment, process, material
-  isActive        Boolean  @default(true)
+  code        String // e.g., "VISC-OOS", "CONTAM", "CURE-FAIL", "EQUIP-MAL"
+  description String // e.g., "Off-spec viscosity", "Contamination"
+  category    String // quality, equipment, process, material
+  isActive    Boolean @default(true)
 
-  createdAt       DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@unique([tenantId, code])
 }
@@ -609,23 +609,23 @@ model ScrapReason {
 //////////////////////////////////////////////////////
 
 model ShiftAssignment {
-  id              String       @id @default(uuid())
-  tenantId        String
+  id       String @id @default(uuid())
+  tenantId String
 
-  operatorId      String
-  operator        Operator     @relation(fields: [operatorId], references: [id])
+  operatorId String
+  operator   Operator @relation(fields: [operatorId], references: [id])
 
-  shift           ShiftPattern
-  date            DateTime     @db.Date  // Calendar date of shift
-  workCenterCode  String?      // Which station they're assigned to
-  plantAreaCode   String?      // Which building: "MAIN", "SHIP", "NEW"
+  shift          ShiftPattern
+  date           DateTime     @db.Date // Calendar date of shift
+  workCenterCode String? // Which station they're assigned to
+  plantAreaCode  String? // Which building: "MAIN", "SHIP", "NEW"
 
-  clockInAt       DateTime?
-  clockOutAt      DateTime?
+  clockInAt  DateTime?
+  clockOutAt DateTime?
 
-  notes           String?
+  notes String?
 
-  createdAt       DateTime     @default(now())
+  createdAt DateTime @default(now())
 
   @@unique([tenantId, operatorId, date, shift])
 }
@@ -635,28 +635,101 @@ model ShiftAssignment {
 //////////////////////////////////////////////////////
 
 model TeamsWebhook {
-  id              String   @id @default(uuid())
-  tenantId        String
+  id       String @id @default(uuid())
+  tenantId String
 
-  name            String           // "Maintenance Alerts", "QC Channel", "Shift Leads"
-  webhookUrl      String           // MS Teams incoming webhook URL
-  channel         String           // "#main-plant-alerts", "#shipping-alerts", "#new-plant-alerts"
+  name       String // "Maintenance Alerts", "QC Channel", "Shift Leads"
+  webhookUrl String // MS Teams incoming webhook URL
+  channel    String // "#main-plant-alerts", "#shipping-alerts", "#new-plant-alerts"
 
   // Scope: which plant area this webhook covers (null = all areas)
-  plantAreaCode   String?          // "MAIN", "SHIP", "NEW" — or null for site-wide
+  plantAreaCode String? // "MAIN", "SHIP", "NEW" — or null for site-wide
 
   // What triggers this webhook
-  onDowntime      Boolean  @default(true)
-  onQualityFail   Boolean  @default(true)
-  onShortage      Boolean  @default(true)
-  onEscalation    Boolean  @default(true)
+  onDowntime    Boolean @default(true)
+  onQualityFail Boolean @default(true)
+  onShortage    Boolean @default(true)
+  onEscalation  Boolean @default(true)
 
   // Escalation rules
   downtimeThresholdMin Int @default(15) // Alert after N minutes of downtime
 
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([tenantId, name])
+}
+
+//////////////////////////////////////////////////////
+// OLYMPUS ANCHOR OUTBOX
+//////////////////////////////////////////////////////
+
+enum OlympusRecordType {
+  MOVEMENT
+  LAB_REPORT
+  SIGNOFF
+}
+
+enum OlympusCommitStatus {
+  PENDING
+  COMMITTED
+  DEAD_LETTER
+}
+
+/// Transactional outbox for Olympus ledger anchors.
+///
+/// A row is written in the SAME transaction as the domain record it anchors,
+/// so a commit can never be lost to a crash, restart, or network failure
+/// between "record saved" and "record anchored". A background drainer
+/// (`services/olympusOutbox.ts`) claims due rows and submits them.
+model OlympusCommit {
+  id            String              @id @default(cuid())
+  tenantId      String
+  recordType    OlympusRecordType
+  recordId      String
+  /// Anchor body — becomes the `data` member of the committed document.
+  payload       Json
+  status        OlympusCommitStatus @default(PENDING)
+  /// Incremented on every claim, not only on failure, so a row whose worker
+  /// dies mid-flight still counts against `maxAttempts` and cannot spin.
+  attempts      Int                 @default(0)
+  /// Doubles as the claim visibility deadline: claiming pushes it into the
+  /// future, so a crashed worker's row simply becomes due again.
+  nextAttemptAt DateTime            @default(now())
+  lastError     String?
+  /// Olympus `proof_id` once committed.
+  proofId       String?
+  /// Olympus `content_hash` (BLAKE3 of the submitted bytes) once committed.
+  contentHash   String?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  /// One anchor per domain record — makes enqueue idempotent under retry.
+  @@unique([recordType, recordId])
+  @@index([status, nextAttemptAt])
+}
+
+//////////////////////////////////////////////////////
+// SOCKET.IO POSTGRES ADAPTER
+//////////////////////////////////////////////////////
+
+/// Spill table for the Socket.IO Postgres adapter.
+///
+/// The adapter fans events out over `NOTIFY`, which caps a payload at 8000
+/// bytes; anything larger (or binary) is written here and referenced by id.
+/// Owned and cleaned up by `@socket.io/postgres-adapter` at runtime — it is
+/// modelled here only so `prisma db push` / `migrate` create it, and so the
+/// schema does not report drift against a database the adapter has touched.
+/// Nothing in application code reads it through Prisma.
+///
+/// Column names and types must match what the adapter expects
+/// (`socket_io_attachments(id bigserial UNIQUE, created_at timestamptz,
+/// payload bytea)`); changing them breaks large-payload delivery at runtime.
+model SocketIoAttachment {
+  id        BigInt   @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  payload   Bytes?
+
+  @@map("socket_io_attachments")
 }

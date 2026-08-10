@@ -6,10 +6,12 @@ import { logger } from '../services/logger.js';
 /**
  * Registers SIGTERM / SIGINT handlers that perform an orderly shutdown:
  *
- * 1. Stop accepting new connections.
+ * 1. Run `hooks.beforeClose` — background workers stop here.
  * 2. Disconnect all Socket.IO clients gracefully.
- * 3. Close the Prisma database connection pool.
- * 4. Exit with code 0.
+ * 3. Stop accepting new connections.
+ * 4. Run `hooks.afterClose` — resources the socket layer depended on close here.
+ * 5. Close the Prisma database connection pool.
+ * 6. Exit with code 0.
  *
  * A hard-kill timeout ensures the process never hangs indefinitely
  * (e.g. when a TCP connection is stuck in CLOSE_WAIT).
@@ -18,6 +20,19 @@ export function registerGracefulShutdown(
   httpServer: Server,
   io: SocketIOServer,
   timeoutMs = 15_000,
+  hooks: {
+    /**
+     * Awaited before anything is torn down, so background workers finish their
+     * in-flight work rather than issuing queries against a closing pool.
+     */
+    beforeClose?: () => Promise<void>;
+    /**
+     * Awaited after Socket.IO and the HTTP server are closed, for resources the
+     * socket layer was still using — the cross-instance adapter's connection
+     * pool must outlive the last broadcast.
+     */
+    afterClose?: () => Promise<void>;
+  } = {},
 ) {
   let shuttingDown = false; // Prevent duplicate handling
 
@@ -35,7 +50,14 @@ export function registerGracefulShutdown(
     forceExit.unref(); // Don't keep the event loop open for the timer
 
     try {
-      // 1. Close Socket.IO (disconnects all clients)
+      // 1. Stop background workers first — they hold the DB pool open and must
+      //    not be cut off mid-submission.
+      if (hooks.beforeClose) {
+        await hooks.beforeClose();
+        logger.info('Background workers stopped');
+      }
+
+      // 2. Close Socket.IO (disconnects all clients)
       await new Promise<void>((resolve) => {
         io.close(() => {
           logger.info('Socket.IO connections closed');
@@ -43,7 +65,7 @@ export function registerGracefulShutdown(
         });
       });
 
-      // 2. Stop accepting new HTTP connections and drain existing ones
+      // 3. Stop accepting new HTTP connections and drain existing ones
       await new Promise<void>((resolve, reject) => {
         httpServer.close((err) => {
           if (err) {
@@ -55,7 +77,12 @@ export function registerGracefulShutdown(
         });
       });
 
-      // 3. Disconnect Prisma
+      // 4. Close resources the socket layer depended on
+      if (hooks.afterClose) {
+        await hooks.afterClose();
+      }
+
+      // 5. Disconnect Prisma
       await prisma.$disconnect();
       logger.info('Database connection closed');
 

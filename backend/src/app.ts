@@ -34,6 +34,7 @@ import { AppError } from './errors/AppError.js';
 import { registerGracefulShutdown } from './lifecycle/shutdown.js';
 import { isOlympusEnabled } from './services/olympusBridge.js';
 import { startOlympusDrainer } from './services/olympusOutbox.js';
+import { attachSocketAdapter } from './sockets/adapter.js';
 import { logger } from './services/logger.js';
 import type { Role } from './middleware/auth.js';
 import { getJwtSecret, validateJwtSecret } from './config/jwt.js';
@@ -268,6 +269,11 @@ if (process.env.NODE_ENV !== 'test') {
     logger.info({ port: PORT, nodeEnv: process.env.NODE_ENV || 'development' }, `TiM server running on port ${PORT}`);
   });
 
+  // Route room broadcasts through Postgres so events reach clients connected
+  // to other backend instances. Attached before the drainer so any emit it
+  // triggers already fans out cross-instance.
+  const socketAdapter = attachSocketAdapter(io);
+
   // Drain the Olympus anchor outbox in the background. Started only when
   // anchoring is configured; safe to run on every instance because rows are
   // claimed with FOR UPDATE SKIP LOCKED.
@@ -280,6 +286,10 @@ if (process.env.NODE_ENV !== 'test') {
   registerGracefulShutdown(httpServer, io, 15_000, {
     beforeClose: async () => {
       await olympusDrainer?.stop();
+    },
+    // After io.close(), so the adapter's pool outlives the last broadcast.
+    afterClose: async () => {
+      await socketAdapter?.close();
     },
   });
 }

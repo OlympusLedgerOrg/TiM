@@ -7,9 +7,14 @@ jest.mock('../src/sockets/workOrderSocket', () => ({
   emitQueueUpdated: jest.fn(),
 }));
 
-// Mock Olympus bridge
+// Mock the Olympus outbox — the enqueue itself is covered by
+// tests/olympusOutbox.test.ts; here we only care about the HTTP behaviour.
+jest.mock('../src/services/olympusOutbox', () => ({
+  enqueueOlympusCommit: jest.fn().mockResolvedValue(undefined),
+  startOlympusDrainer: jest.fn(),
+}));
 jest.mock('../src/services/olympusBridge', () => ({
-  commitToOlympus: jest.fn().mockResolvedValue('commit-abc'),
+  isOlympusEnabled: jest.fn().mockReturnValue(false),
 }));
 
 // Prisma mocked BEFORE importing app to avoid real DB calls.
@@ -17,13 +22,19 @@ const m = {
   batch: { findFirst: jest.fn(), update: jest.fn() },
   labReport: { create: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
   signoff: { create: jest.fn() },
+  olympusCommit: { upsert: jest.fn() },
   $queryRaw: jest.fn(),
+  $transaction: jest.fn(),
 };
+// Interactive transaction: run the callback against the same mock client.
+// Set after the literal so `m` does not reference itself in its own initializer.
+m.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(m));
 jest.mock('../src/prisma/client', () => ({ prisma: m }));
 
 import request from 'supertest';
 import { app, server } from '../src/app';
 import { SignJWT } from 'jose';
+import { enqueueOlympusCommit } from '../src/services/olympusOutbox';
 
 async function makeToken(role: 'Tech' | 'Supervisor' | 'Admin', tenantId = 'default') {
   const key = new TextEncoder().encode(process.env.JWT_SECRET!);
@@ -109,6 +120,42 @@ describe('POST /api/v1/lab-reports', () => {
       data: { status: 'FLAGGED' },
     });
   });
+
+  test('enqueues the Olympus anchor inside the report transaction', async () => {
+    m.batch.findFirst.mockResolvedValue({ id: 'batch-1', lotNumber: 'LOT-001' });
+    m.labReport.create.mockResolvedValue({
+      id: 'lr-1',
+      batchId: 'batch-1',
+      fileHash: validBody.fileHash,
+      submittedAt: new Date(),
+    });
+    const token = await makeToken('Tech');
+    await request(app)
+      .post('/api/v1/lab-reports')
+      .set('Authorization', `Bearer ${token}`)
+      .send(validBody);
+
+    expect(enqueueOlympusCommit).toHaveBeenCalledTimes(1);
+    const [txClient, anchor] = (enqueueOlympusCommit as jest.Mock).mock.calls[0];
+    expect(txClient).toBe(m);
+    expect(anchor).toMatchObject({
+      type: 'LAB_REPORT',
+      recordId: 'lr-1',
+      data: expect.objectContaining({ fileHash: validBody.fileHash, lotNumber: 'LOT-001' }),
+    });
+  });
+
+  test('does not enqueue an anchor when the batch is missing', async () => {
+    m.batch.findFirst.mockResolvedValue(null);
+    const token = await makeToken('Tech');
+    const res = await request(app)
+      .post('/api/v1/lab-reports')
+      .set('Authorization', `Bearer ${token}`)
+      .send(validBody);
+
+    expect(res.status).toBe(404);
+    expect(enqueueOlympusCommit).not.toHaveBeenCalled();
+  });
 });
 
 describe('POST /api/v1/lab-reports/:reportId/signoff', () => {
@@ -176,5 +223,52 @@ describe('POST /api/v1/lab-reports/:reportId/signoff', () => {
       .send({ notes: 'Approved' });
     expect(res.status).toBe(201);
     expect(res.body).toHaveProperty('signoff');
+  });
+
+  test('enqueues the Olympus anchor inside the signoff transaction', async () => {
+    m.labReport.findFirst.mockResolvedValue({
+      id: 'lr-1',
+      signoff: null,
+      batchId: 'batch-1',
+      fileHash: 'a'.repeat(64),
+      result: 'PASS',
+      batch: { lotNumber: 'LOT-001' },
+    });
+    m.signoff.create.mockResolvedValue({
+      id: 's-1',
+      labReportId: 'lr-1',
+      managerId: 'user-1',
+      signedAt: new Date(),
+    });
+    const token = await makeToken('Supervisor');
+    await request(app)
+      .post('/api/v1/lab-reports/lr-1/signoff')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ notes: 'Approved' });
+
+    expect(enqueueOlympusCommit).toHaveBeenCalledTimes(1);
+    const [txClient, anchor] = (enqueueOlympusCommit as jest.Mock).mock.calls[0];
+    expect(txClient).toBe(m);
+    expect(anchor).toMatchObject({
+      type: 'SIGNOFF',
+      recordId: 's-1',
+      data: expect.objectContaining({ labReportId: 'lr-1', lotNumber: 'LOT-001' }),
+    });
+  });
+
+  test('does not enqueue an anchor when the report is already signed off', async () => {
+    m.labReport.findFirst.mockResolvedValue({
+      id: 'lr-1',
+      signoff: { id: 's-1' },
+      batch: { lotNumber: 'LOT-001' },
+    });
+    const token = await makeToken('Supervisor');
+    const res = await request(app)
+      .post('/api/v1/lab-reports/lr-1/signoff')
+      .set('Authorization', `Bearer ${token}`)
+      .send({});
+
+    expect(res.status).toBe(409);
+    expect(enqueueOlympusCommit).not.toHaveBeenCalled();
   });
 });

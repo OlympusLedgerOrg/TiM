@@ -1,7 +1,6 @@
 import { prisma } from '../prisma/client.js';
-import { commitToOlympus } from './olympusBridge.js';
+import { enqueueOlympusCommit } from './olympusOutbox.js';
 import { emitQueueUpdated } from '../sockets/workOrderSocket.js';
-import { logger } from './logger.js';
 
 export async function logMovement(opts: {
   tenantId: string;
@@ -17,8 +16,11 @@ export async function logMovement(opts: {
   });
   if (!batch) return { status: 404, body: { message: 'Batch not found' } };
 
-  const [movement] = await prisma.$transaction([
-    prisma.movement.create({
+  // The Olympus anchor is enqueued inside this transaction, so the movement and
+  // its ledger commitment are durable together — a crash or an Olympus outage
+  // can delay the anchor but can no longer lose it.
+  const movement = await prisma.$transaction(async (tx) => {
+    const created = await tx.movement.create({
       data: {
         tenantId: opts.tenantId,
         batchId: opts.batchId,
@@ -28,41 +30,32 @@ export async function logMovement(opts: {
         movedByUserId: opts.movedByUserId,
         notes: opts.notes,
       },
-    }),
-    prisma.batch.update({
+    });
+
+    await tx.batch.update({
       where: { id: opts.batchId },
       data: {
         workCenterId: opts.toWorkCenterId,
         status: 'IN_PROGRESS',
       },
-    }),
-  ]);
+    });
 
-  // Fire-and-forget Olympus anchor — never blocks response
-  commitToOlympus({
-    type: 'MOVEMENT',
-    tenantId: opts.tenantId,
-    recordId: movement.id,
-    data: {
-      batchId: opts.batchId,
-      lotNumber: batch.lotNumber,
-      from: opts.fromWorkCenterId,
-      to: opts.toWorkCenterId,
-      quantity: opts.quantity,
-      movedBy: opts.movedByUserId,
-      movedAt: movement.movedAt.toISOString(),
-    },
-  }).then((commitId) => {
-    if (commitId) {
-      prisma.movement.update({
-        where: { id: movement.id },
-        data: { olympusCommitId: commitId },
-      }).catch((err) => {
-        logger.error({ err, movementId: movement.id }, '[Movement] Failed to update olympusCommitId');
-      });
-    }
-  }).catch((err) => {
-    logger.error({ err }, '[Movement] Failed to commit to Olympus');
+    await enqueueOlympusCommit(tx, {
+      type: 'MOVEMENT',
+      tenantId: opts.tenantId,
+      recordId: created.id,
+      data: {
+        batchId: opts.batchId,
+        lotNumber: batch.lotNumber,
+        from: opts.fromWorkCenterId,
+        to: opts.toWorkCenterId,
+        quantity: opts.quantity,
+        movedBy: opts.movedByUserId,
+        movedAt: created.movedAt.toISOString(),
+      },
+    });
+
+    return created;
   });
 
   emitQueueUpdated(opts.tenantId);
@@ -77,6 +70,8 @@ export async function logMovement(opts: {
         to: movement.toWorkCenterId,
         quantity: movement.quantity,
         movedAt: movement.movedAt,
+        // Populated by the outbox drainer once the anchor is committed; null
+        // here because the ledger round-trip is deliberately off the request path.
         olympusCommitId: movement.olympusCommitId,
       },
     },

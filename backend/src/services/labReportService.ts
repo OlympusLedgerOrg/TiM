@@ -1,6 +1,5 @@
 import { prisma } from '../prisma/client.js';
-import { commitToOlympus } from './olympusBridge.js';
-import { logger } from './logger.js';
+import { enqueueOlympusCommit } from './olympusOutbox.js';
 
 export async function submitLabReport(opts: {
   tenantId: string;
@@ -16,16 +15,36 @@ export async function submitLabReport(opts: {
   });
   if (!batch) return { status: 404, body: { message: 'Batch not found' } };
 
-  const report = await prisma.labReport.create({
-    data: {
+  // Report + anchor land atomically; see movementService for the rationale.
+  const report = await prisma.$transaction(async (tx) => {
+    const created = await tx.labReport.create({
+      data: {
+        tenantId: opts.tenantId,
+        batchId: opts.batchId,
+        fileHash: opts.fileHash,
+        fileUrl: opts.fileUrl,
+        fileName: opts.fileName,
+        result: opts.result,
+        submittedBy: opts.submittedBy,
+      },
+    });
+
+    await enqueueOlympusCommit(tx, {
+      type: 'LAB_REPORT',
       tenantId: opts.tenantId,
-      batchId: opts.batchId,
-      fileHash: opts.fileHash,
-      fileUrl: opts.fileUrl,
-      fileName: opts.fileName,
-      result: opts.result,
-      submittedBy: opts.submittedBy,
-    },
+      recordId: created.id,
+      data: {
+        batchId: opts.batchId,
+        lotNumber: batch.lotNumber,
+        fileHash: opts.fileHash,
+        fileName: opts.fileName,
+        result: opts.result,
+        submittedBy: opts.submittedBy,
+        submittedAt: created.submittedAt.toISOString(),
+      },
+    });
+
+    return created;
   });
 
   if (opts.result === 'FAIL') {
@@ -34,33 +53,6 @@ export async function submitLabReport(opts: {
       data: { status: 'FLAGGED' },
     });
   }
-
-  // Anchor the file hash + metadata to Olympus
-  commitToOlympus({
-    type: 'LAB_REPORT',
-    tenantId: opts.tenantId,
-    recordId: report.id,
-    data: {
-      batchId: opts.batchId,
-      lotNumber: batch.lotNumber,
-      fileHash: opts.fileHash,
-      fileName: opts.fileName,
-      result: opts.result,
-      submittedBy: opts.submittedBy,
-      submittedAt: report.submittedAt.toISOString(),
-    },
-  }).then((commitId) => {
-    if (commitId) {
-      prisma.labReport.update({
-        where: { id: report.id },
-        data: { olympusCommitId: commitId },
-      }).catch((err) => {
-        logger.error({ err, reportId: report.id }, '[LabReport] Failed to update olympusCommitId');
-      });
-    }
-  }).catch((err) => {
-    logger.error({ err }, '[LabReport] Failed to commit to Olympus');
-  });
 
   return { status: 201, body: { report } };
 }
@@ -78,39 +70,32 @@ export async function signoffLabReport(opts: {
   if (!report) return { status: 404, body: { message: 'Lab report not found' } };
   if (report.signoff) return { status: 409, body: { message: 'Already signed off' } };
 
-  const signoff = await prisma.signoff.create({
-    data: {
-      tenantId: opts.tenantId,
-      labReportId: opts.labReportId,
-      managerId: opts.managerId,
-      notes: opts.notes,
-    },
-  });
+  const signoff = await prisma.$transaction(async (tx) => {
+    const created = await tx.signoff.create({
+      data: {
+        tenantId: opts.tenantId,
+        labReportId: opts.labReportId,
+        managerId: opts.managerId,
+        notes: opts.notes,
+      },
+    });
 
-  commitToOlympus({
-    type: 'SIGNOFF',
-    tenantId: opts.tenantId,
-    recordId: signoff.id,
-    data: {
-      labReportId: opts.labReportId,
-      batchId: report.batchId,
-      lotNumber: report.batch.lotNumber,
-      fileHash: report.fileHash,
-      result: report.result,
-      managerId: opts.managerId,
-      signedAt: signoff.signedAt.toISOString(),
-    },
-  }).then((commitId) => {
-    if (commitId) {
-      prisma.signoff.update({
-        where: { id: signoff.id },
-        data: { olympusCommitId: commitId },
-      }).catch((err) => {
-        logger.error({ err, signoffId: signoff.id }, '[Signoff] Failed to update olympusCommitId');
-      });
-    }
-  }).catch((err) => {
-    logger.error({ err }, '[Signoff] Failed to commit to Olympus');
+    await enqueueOlympusCommit(tx, {
+      type: 'SIGNOFF',
+      tenantId: opts.tenantId,
+      recordId: created.id,
+      data: {
+        labReportId: opts.labReportId,
+        batchId: report.batchId,
+        lotNumber: report.batch.lotNumber,
+        fileHash: report.fileHash,
+        result: report.result,
+        managerId: opts.managerId,
+        signedAt: created.signedAt.toISOString(),
+      },
+    });
+
+    return created;
   });
 
   return { status: 201, body: { signoff } };

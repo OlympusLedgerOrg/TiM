@@ -660,3 +660,52 @@ model TeamsWebhook {
 
   @@unique([tenantId, name])
 }
+
+//////////////////////////////////////////////////////
+// OLYMPUS ANCHOR OUTBOX
+//////////////////////////////////////////////////////
+
+enum OlympusRecordType {
+  MOVEMENT
+  LAB_REPORT
+  SIGNOFF
+}
+
+enum OlympusCommitStatus {
+  PENDING
+  COMMITTED
+  DEAD_LETTER
+}
+
+/// Transactional outbox for Olympus ledger anchors.
+///
+/// A row is written in the SAME transaction as the domain record it anchors,
+/// so a commit can never be lost to a crash, restart, or network failure
+/// between "record saved" and "record anchored". A background drainer
+/// (`services/olympusOutbox.ts`) claims due rows and submits them.
+model OlympusCommit {
+  id            String              @id @default(cuid())
+  tenantId      String
+  recordType    OlympusRecordType
+  recordId      String
+  /// Anchor body — becomes the `data` member of the committed document.
+  payload       Json
+  status        OlympusCommitStatus @default(PENDING)
+  /// Incremented on every claim, not only on failure, so a row whose worker
+  /// dies mid-flight still counts against `maxAttempts` and cannot spin.
+  attempts      Int                 @default(0)
+  /// Doubles as the claim visibility deadline: claiming pushes it into the
+  /// future, so a crashed worker's row simply becomes due again.
+  nextAttemptAt DateTime            @default(now())
+  lastError     String?
+  /// Olympus `proof_id` once committed.
+  proofId       String?
+  /// Olympus `content_hash` (BLAKE3 of the submitted bytes) once committed.
+  contentHash   String?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  /// One anchor per domain record — makes enqueue idempotent under retry.
+  @@unique([recordType, recordId])
+  @@index([status, nextAttemptAt])
+}

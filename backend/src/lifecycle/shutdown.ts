@@ -9,8 +9,9 @@ import { logger } from '../services/logger.js';
  * 1. Run `hooks.beforeClose` — background workers stop here.
  * 2. Disconnect all Socket.IO clients gracefully.
  * 3. Stop accepting new connections.
- * 4. Close the Prisma database connection pool.
- * 5. Exit with code 0.
+ * 4. Run `hooks.afterClose` — resources the socket layer depended on close here.
+ * 5. Close the Prisma database connection pool.
+ * 6. Exit with code 0.
  *
  * A hard-kill timeout ensures the process never hangs indefinitely
  * (e.g. when a TCP connection is stuck in CLOSE_WAIT).
@@ -25,6 +26,12 @@ export function registerGracefulShutdown(
      * in-flight work rather than issuing queries against a closing pool.
      */
     beforeClose?: () => Promise<void>;
+    /**
+     * Awaited after Socket.IO and the HTTP server are closed, for resources the
+     * socket layer was still using — the cross-instance adapter's connection
+     * pool must outlive the last broadcast.
+     */
+    afterClose?: () => Promise<void>;
   } = {},
 ) {
   let shuttingDown = false; // Prevent duplicate handling
@@ -70,7 +77,12 @@ export function registerGracefulShutdown(
         });
       });
 
-      // 4. Disconnect Prisma
+      // 4. Close resources the socket layer depended on
+      if (hooks.afterClose) {
+        await hooks.afterClose();
+      }
+
+      // 5. Disconnect Prisma
       await prisma.$disconnect();
       logger.info('Database connection closed');
 
